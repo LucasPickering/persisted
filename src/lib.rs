@@ -93,6 +93,17 @@ where
     }
 }
 
+impl<B, K> Default for Persisted<B, K>
+where
+    B: PersistedStore<K>,
+    K: PersistedKey + Default,
+    K::Value: Default,
+{
+    fn default() -> Self {
+        Self::new(Default::default(), Default::default())
+    }
+}
+
 /// TODO
 impl<B, K> PartialEq<K::Value> for Persisted<B, K>
 where
@@ -170,6 +181,17 @@ where
     }
 }
 
+impl<B, K, C> Default for PersistedLazy<B, K, C>
+where
+    B: PersistedStore<K>,
+    K: PersistedKey + Default,
+    C: PersistedContainer<Value = K::Value> + Default,
+{
+    fn default() -> Self {
+        Self::new(Default::default(), Default::default())
+    }
+}
+
 /// TODO
 impl<B, K, C> PartialEq<C> for PersistedLazy<B, K, C>
 where
@@ -202,6 +224,18 @@ where
 pub trait PersistedKey {
     /// TODO
     type Value;
+
+    /// Get a unique name for this key type. This should be globally unique
+    /// within the scope of your program. This is important to use while
+    /// persisting because `serde` typically doesn't include the name of the
+    /// type, just the content. This unique name allows the store to
+    /// disambiguate between different key types of the same structure. This is
+    /// particular important for unit keys.
+    ///
+    /// In most cases this you can rely on the derive implementation, which uses
+    /// [std::any::type_name]. However, for wrapper key types (e.g.
+    /// [SingletonKey]), this should return the name of the wrapped type.
+    fn name() -> &'static str;
 }
 
 /// TODO
@@ -217,31 +251,17 @@ pub trait PersistedContainer {
 }
 
 /// TODO
-#[derive(Debug)]
+#[derive(Debug, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
-#[cfg_attr(feature = "serde", serde(bound = "K: serde::Serialize"))]
-pub struct UniqueKey<'a, K> {
-    name: &'static str,
-    key: &'a K,
+pub struct SingletonKey<V> {
+    phantom: PhantomData<V>,
 }
 
-impl<'a, K: PersistedKey> UniqueKey<'a, K> {
-    /// TODO
-    pub fn new(key: &'a K) -> Self {
-        Self {
-            name: any::type_name::<K>(),
-            key,
-        }
-    }
+impl<V> PersistedKey for SingletonKey<V> {
+    type Value = V;
 
-    /// Get the unique name of the key *type*
-    pub fn name(&self) -> &str {
-        self.name
-    }
-
-    /// Get the contained key
-    pub fn key(&self) -> &'a K {
-        self.key
+    fn name() -> &'static str {
+        any::type_name::<V>()
     }
 }
 
@@ -252,6 +272,10 @@ macro_rules! impl_persisted_key {
     ($type:ty, $value:ty) => {
         impl $crate::PersistedKey for $type {
             type Value = $value;
+
+            fn name() -> &'static str {
+                std::any::type_name::<Self>()
+            }
         }
     };
 }
