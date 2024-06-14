@@ -1,6 +1,22 @@
 [package]
-name = "persisted"
-version = "0.1.0"
+authors = ["Lucas Pickering <lucas@lucaspickering.me>"]
+description = "UI state persistence library"
 edition = "2021"
+license = "MIT"
+name = "persisted"
+repository = "https://github.com/LucasPickering/slumber"
+version = "0.0.1"
+# Keep in sync w/ rust-toolchain.toml
+# TODO downgrade as possible
+rust-version = "1.76.0"
 
 [dependencies]
+derive_more = {version = "1.0.0-beta.6", features = ["debug", "deref", "deref_mut"]}
+serde = {version = "1", default-features = false, features = ["derive"], optional = true}
+
+[dev-dependencies]
+rusqlite = {version = "0.31.0", default-features = false, features = ["bundled"]}
+serde_json = "1.0.117"
+
+[features]
+serde = ["dep:serde"]
