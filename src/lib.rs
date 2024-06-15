@@ -7,6 +7,10 @@
 use derive_more::{Deref, DerefMut};
 use std::{any, fmt::Display, marker::PhantomData};
 
+/// Re-export derive macros
+#[cfg(feature = "derive")]
+pub use persisted_derive::PersistedKey;
+
 /// TODO
 pub trait PersistedStore<K: PersistedKey> {
     type Error: Display;
@@ -263,21 +267,6 @@ impl<V> PersistedKey for SingletonKey<V> {
     fn name() -> &'static str {
         any::type_name::<V>()
     }
-}
-
-/// Implement [PersistedKey] for a type, with a fixed value type
-/// TODO derive macro
-#[macro_export]
-macro_rules! impl_persisted_key {
-    ($type:ty, $value:ty) => {
-        impl $crate::PersistedKey for $type {
-            type Value = $value;
-
-            fn name() -> &'static str {
-                std::any::type_name::<Self>()
-            }
-        }
-    };
 }
 
 #[cfg(test)]

@@ -111,9 +111,19 @@ name = "persisted"
 version = "0.0.1"
 dependencies = [
  "derive_more",
+ "persisted_derive",
  "rusqlite",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "persisted_derive"
+version = "0.0.1"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]

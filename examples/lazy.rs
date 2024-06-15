@@ -27,15 +27,9 @@ struct SelectList {
     selected_index: usize,
 }
 
+#[derive(PersistedKey)]
+#[persisted(PersonId)]
 struct SelectedIdKey;
-
-impl SelectedIdKey {
-    const DB_KEY: &'static str = "selected_id";
-}
-
-impl PersistedKey for SelectedIdKey {
-    type Value = PersonId;
-}
 
 fn main() {
     let person_list = vec![
@@ -116,7 +110,7 @@ impl PersistedStore<SelectedIdKey> for Store {
         self.0
             .query_row(
                 "SELECT value FROM persisted WHERE key = :key",
-                named_params! { ":key": SelectedIdKey::DB_KEY },
+                named_params! { ":key": SelectedIdKey::name() },
                 |row| {
                     let id: u64 = row.get("value")?;
                     Ok(PersonId(id))
@@ -137,7 +131,7 @@ impl PersistedStore<SelectedIdKey> for Store {
                 VALUES (:key, :value)
                 ON CONFLICT DO UPDATE SET value = excluded.value",
                 named_params! {
-                    ":key": SelectedIdKey::DB_KEY,
+                    ":key": SelectedIdKey::name(),
                     ":value": value.0,
                 },
             )

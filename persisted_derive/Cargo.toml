@@ -1,0 +1,19 @@
+[package]
+authors = ["Lucas Pickering <lucas@lucaspickering.me>"]
+description = "Derive macros for persisted"
+edition = "2021"
+license = "MIT"
+name = "persisted_derive"
+repository = "https://github.com/LucasPickering/persisted"
+version = "0.0.1"
+# Keep in sync w/ rust-toolchain.toml
+# TODO downgrade as possible
+rust-version = "1.76.0"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+proc-macro2 = "1" # TODO: needed?
+quote = "1" 
+syn = {version = "2", features = ["extra-traits"]}

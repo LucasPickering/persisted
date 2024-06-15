@@ -27,14 +27,12 @@ struct SelectList<T> {
 /// Persist the selected value in the list by storing its index. This is simple
 /// but relies on the list keeping the same items, in the same order, between
 /// sessions.
+#[derive(PersistedKey)]
+#[persisted(usize)]
 struct SelectedIndexKey;
 
 impl SelectedIndexKey {
     const DB_KEY: &'static str = "selected_index";
-}
-
-impl PersistedKey for SelectedIndexKey {
-    type Value = usize;
 }
 
 fn main() {
