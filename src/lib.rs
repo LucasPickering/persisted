@@ -1,11 +1,10 @@
 //! TODO
-//!
-//! ```
-//! TODO hashmap
-//! ```
 
+#![no_std]
+
+use core::{any, fmt::Display, marker::PhantomData};
+// TODO remove dep
 use derive_more::{Deref, DerefMut};
-use std::{any, fmt::Display, marker::PhantomData};
 
 /// Re-export derive macros
 #[cfg(feature = "derive")]
@@ -13,16 +12,25 @@ pub use persisted_derive::PersistedKey;
 
 /// TODO
 pub trait PersistedStore<K: PersistedKey> {
+    /// The type of error that this store can encounter while saving or loading
+    /// persisted values
     type Error: Display;
 
-    /// TODO
+    /// Execute a function with an instance of this store. This is how
+    /// `persisted` will access the store. The closure-based interface provides
+    /// compatibility with [thread locals](std::thread_local).
     fn with_instance<T>(f: impl FnOnce(&Self) -> T) -> T;
 
-    /// TODO rename?
-    fn get(&self, key: &K) -> Result<Option<K::Value>, Self::Error>;
+    /// Load a persisted value from the store, identified by the given key.
+    /// Return `Ok(None)` if the value isn't present.
+    fn load_persisted(&self, key: &K) -> Result<Option<K::Value>, Self::Error>;
 
-    /// TODO rename?
-    fn set(&self, key: &K, value: K::Value) -> Result<(), Self::Error>;
+    /// Persist a value in the store, under the given key
+    fn store_persisted(
+        &self,
+        key: &K,
+        value: K::Value,
+    ) -> Result<(), Self::Error>;
 }
 
 /// A wrapper for any value that will automatically persist it to the state DB.
@@ -37,7 +45,9 @@ where
     #[debug(skip)] // This omits the Debug bound on B
     backend: PhantomData<B>,
     key: K,
-    /// TODO explain option
+    /// This is an option so we can move the value out and pass it to the store
+    /// during drop
+    /// Invariant: Always `Some` until drop
     value: Option<K::Value>,
 }
 
@@ -46,11 +56,11 @@ where
     B: PersistedStore<K>,
     K: PersistedKey,
 {
-    /// Load the latest persisted value from the DB. If present, set the value
-    /// of the container. If not, fall back to the given default
+    /// Initialize a new persisted value. The latest persisted value will be
+    /// loaded from the store. If missing, use the given default instead.
     pub fn new(key: K, default: K::Value) -> Self {
         // Fetch persisted value from the backend
-        let value = match B::with_instance(|store| store.get(&key)) {
+        let value = match B::with_instance(|store| store.load_persisted(&key)) {
             Ok(Some(value)) => value,
             Ok(None) => default,
             // TODO tracing
@@ -64,7 +74,9 @@ where
         }
     }
 
-    /// TODO
+    /// Initialize a new persisted value. The latest persisted value will be
+    /// loaded from the store. If missing, use the value type's [Default]
+    /// implementation instead.
     pub fn new_default(key: K) -> Self
     where
         K::Value: Default,
@@ -81,7 +93,7 @@ where
     type Target = K::Value;
 
     fn deref(&self) -> &Self::Target {
-        // TODO explain safety
+        // Safe because value is always Some until drop
         self.value.as_ref().unwrap()
     }
 }
@@ -92,7 +104,7 @@ where
     K: PersistedKey,
 {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        // TODO explain safety
+        // Safe because value is always Some until drop
         self.value.as_mut().unwrap()
     }
 }
@@ -120,6 +132,7 @@ where
     }
 }
 
+/// Save value on drop
 impl<B, K> Drop for Persisted<B, K>
 where
     B: PersistedStore<K>,
@@ -128,7 +141,7 @@ where
     fn drop(&mut self) {
         let value = self.value.take().unwrap();
         if let Err(_error) =
-            B::with_instance(|store| store.set(&self.key, value))
+            B::with_instance(|store| store.store_persisted(&self.key, value))
         {
             // TODO tracing
         }
@@ -162,7 +175,7 @@ where
     /// of the container.
     pub fn new(key: K, mut container: C) -> Self {
         // Fetch persisted value from the backend
-        match B::with_instance(|store| store.get(&key)) {
+        match B::with_instance(|store| store.load_persisted(&key)) {
             Ok(Some(value)) => container.set_persisted(value),
             Ok(None) => {}
             // TODO tracing
@@ -197,6 +210,7 @@ where
 }
 
 /// TODO
+/// TODO is this an anti-pattern? Check PartialEq docs
 impl<B, K, C> PartialEq<C> for PersistedLazy<B, K, C>
 where
     B: PersistedStore<K>,
@@ -208,6 +222,7 @@ where
     }
 }
 
+/// Save value on drop
 impl<B, K, C> Drop for PersistedLazy<B, K, C>
 where
     B: PersistedStore<K>,
@@ -217,7 +232,7 @@ where
     fn drop(&mut self) {
         let value = self.container.get_persisted();
         if let Err(_error) =
-            B::with_instance(|store| store.set(&self.key, value))
+            B::with_instance(|store| store.store_persisted(&self.key, value))
         {
             // TODO tracing
         }
@@ -226,24 +241,40 @@ where
 
 /// TODO
 pub trait PersistedKey {
-    /// TODO
+    /// The type of the persisted value associated with this key
     type Value;
 
     /// Get a unique name for this key type. This should be globally unique
     /// within the scope of your program. This is important to use while
-    /// persisting because `serde` typically doesn't include the name of the
-    /// type, just the content. This unique name allows the store to
-    /// disambiguate between different key types of the same structure. This is
-    /// particular important for unit keys.
+    /// persisting because most serialization formats don't include the name of
+    /// the type, just the content. This unique name allows the store to
+    /// disambiguate between different key types of the same structure, which is
+    /// particular important for unit keys. For example, if your store persists
+    /// data as JSON,  a serialized key may be just an ID, e.g. `3`. This alone
+    /// is not a useful key because it's ambiguous in the scope of your entire
+    /// program. [type_name] allows you to include the key type, so you could
+    /// serialize the same key as `["Person", 3]` or `{"type": "Person", "key":
+    /// 3}`. It's up to the [PersistedStore] implementation to decide how to
+    /// actually employ this function, it's provided merely as a utility.
     ///
     /// In most cases this you can rely on the derive implementation, which uses
     /// [std::any::type_name]. However, for wrapper key types (e.g.
     /// [SingletonKey]), this should return the name of the wrapped type.
-    fn name() -> &'static str;
+    ///
+    /// Using this is *not* necessary if you use a persistence format that
+    /// includes the type name, e.g. [RON](https://github.com/ron-rs/ron). If
+    /// that's the case your implementations of this can return `""` (or panic),
+    /// but in most cases it's easier just to use the derive macro anyway, and
+    /// just don't call this function.
+    fn type_name() -> &'static str;
 }
 
-/// TODO
+/// A container that can store and provide a persisted value. This is used in
+/// conjunction with [PersistedLazy] to define how to lazily get the value that
+/// should be persisted, and how to restore state when a persisted value is
+/// loaded during initialization.
 pub trait PersistedContainer {
+    /// The value to be persisted
     type Value;
 
     /// Get the current value to persist in the store
@@ -255,6 +286,7 @@ pub trait PersistedContainer {
 }
 
 /// TODO
+/// TODO add caveat about using types like Option<T>
 #[derive(Debug, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub struct SingletonKey<V> {
@@ -264,7 +296,7 @@ pub struct SingletonKey<V> {
 impl<V> PersistedKey for SingletonKey<V> {
     type Value = V;
 
-    fn name() -> &'static str {
+    fn type_name() -> &'static str {
         any::type_name::<V>()
     }
 }

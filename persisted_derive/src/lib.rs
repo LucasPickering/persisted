@@ -33,7 +33,7 @@ pub fn persisted_key_derive(input: TokenStream) -> TokenStream {
         impl persisted::PersistedKey for #name {
             type Value = #value_type;
 
-            fn name() -> &'static str {
+            fn type_name() -> &'static str {
                 std::any::type_name::<Self>()
             }
         }

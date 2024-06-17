@@ -9,7 +9,6 @@ struct Store(Connection);
 #[derive(Copy, Clone, Debug, PartialEq)]
 struct PersonId(u64);
 
-/// TODO
 #[derive(Clone, Debug)]
 #[allow(unused)]
 struct Person {
@@ -30,10 +29,6 @@ struct SelectList<T> {
 #[derive(PersistedKey)]
 #[persisted(usize)]
 struct SelectedIndexKey;
-
-impl SelectedIndexKey {
-    const DB_KEY: &'static str = "selected_index";
-}
 
 fn main() {
     let person_list = vec![
@@ -95,20 +90,20 @@ impl PersistedStore<SelectedIndexKey> for Store {
         Self::INSTANCE.with(f)
     }
 
-    fn get(
+    fn load_persisted(
         &self,
         _key: &SelectedIndexKey,
     ) -> Result<Option<usize>, Self::Error> {
         self.0
             .query_row(
                 "SELECT value FROM persisted WHERE key = :key",
-                named_params! { ":key": SelectedIndexKey::DB_KEY },
+                named_params! { ":key": SelectedIndexKey::type_name() },
                 |row| row.get("value"),
             )
             .optional()
     }
 
-    fn set(
+    fn store_persisted(
         &self,
         _key: &SelectedIndexKey,
         index: usize,
@@ -120,7 +115,7 @@ impl PersistedStore<SelectedIndexKey> for Store {
                 VALUES (:key, :value)
                 ON CONFLICT DO UPDATE SET value = excluded.value",
                 named_params! {
-                    ":key": SelectedIndexKey::DB_KEY,
+                    ":key": SelectedIndexKey::type_name(),
                     ":value": index,
                 },
             )

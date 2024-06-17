@@ -103,14 +103,14 @@ impl PersistedStore<SelectedIdKey> for Store {
         Self::INSTANCE.with(f)
     }
 
-    fn get(
+    fn load_persisted(
         &self,
         _key: &SelectedIdKey,
     ) -> Result<Option<PersonId>, Self::Error> {
         self.0
             .query_row(
                 "SELECT value FROM persisted WHERE key = :key",
-                named_params! { ":key": SelectedIdKey::name() },
+                named_params! { ":key": SelectedIdKey::type_name() },
                 |row| {
                     let id: u64 = row.get("value")?;
                     Ok(PersonId(id))
@@ -119,7 +119,7 @@ impl PersistedStore<SelectedIdKey> for Store {
             .optional()
     }
 
-    fn set(
+    fn store_persisted(
         &self,
         _key: &SelectedIdKey,
         value: PersonId,
@@ -131,7 +131,7 @@ impl PersistedStore<SelectedIdKey> for Store {
                 VALUES (:key, :value)
                 ON CONFLICT DO UPDATE SET value = excluded.value",
                 named_params! {
-                    ":key": SelectedIdKey::name(),
+                    ":key": SelectedIdKey::type_name(),
                     ":value": value.0,
                 },
             )
