@@ -126,8 +126,8 @@ use core::{
     any,
     fmt::{self, Debug},
     marker::PhantomData,
-    ops::{Deref, DerefMut},
 };
+use derive_more::{Deref, DerefMut, Display};
 
 /// A trait for any data store capable of persisting data. A store is the layer
 /// that saves data. It could save it in memory, on disk, over the network, etc.
@@ -184,11 +184,23 @@ pub trait PersistedStore<K: PersistedKey> {
 ///
 /// The contained value is accessed and modified via [Deref] and [DerefMut]
 /// implementations, respectively.
+///
+/// ## Cloning
+///
+/// This type intentionally does *not* implement [Clone]. Cloning would result
+/// in two values with the same key. When the values are eventually dropped,
+/// whichever is dropped first would have its persisted value overwritten by
+/// the other. It's unlikely this is the desired behavior, and therefore is not
+/// provided.
+#[derive(derive_more::Debug, Display)]
+#[display(bound(K::Value: Display))]
+#[display("{}", value.as_ref().unwrap())] // See invariant on field
 pub struct Persisted<S, K>
 where
     S: PersistedStore<K>,
     K: PersistedKey,
 {
+    #[debug(skip)] // Omit bound on S
     backend: PhantomData<S>,
     key: K,
     /// This is an option so we can move the value out and pass it to the store
@@ -226,23 +238,7 @@ where
     }
 }
 
-// Needed to omit Debug bound on B
-impl<S, K> Debug for Persisted<S, K>
-where
-    S: PersistedStore<K>,
-    K: PersistedKey + Debug,
-    K::Value: Debug,
-{
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Persisted")
-            .field("backend", &self.backend)
-            .field("key", &self.key)
-            .field("value", &self.value)
-            .finish()
-    }
-}
-
-// Needed to omit Default bound on B
+// Needed to omit Default bound on S
 impl<S, K> Default for Persisted<S, K>
 where
     S: PersistedStore<K>,
@@ -308,14 +304,27 @@ where
 ///
 /// The inner container is accessed and modified via [Deref] and [DerefMut]
 /// implementations, respectively.
+///
+/// ## Cloning
+///
+/// This type intentionally does *not* implement [Clone]. Cloning would result
+/// in two containers with the same key. When the containers are eventually
+/// dropped, whichever is dropped first would have its persisted value
+/// overwritten by the other. It's unlikely this is the desired behavior, and
+/// therefore is not provided.
+#[derive(derive_more::Debug, Deref, DerefMut, Display)]
+#[display("{}", container)]
 pub struct PersistedLazy<S, K, C>
 where
     S: PersistedStore<K>,
     K: PersistedKey,
     C: PersistedContainer<Value = K::Value>,
 {
+    #[debug(skip)] // Omit bound on S
     backend: PhantomData<S>,
     key: K,
+    #[deref]
+    #[deref_mut]
     container: C,
 }
 
@@ -354,23 +363,7 @@ where
     }
 }
 
-// Needed to omit Debug bound on B
-impl<S, K, C> Debug for PersistedLazy<S, K, C>
-where
-    S: PersistedStore<K>,
-    K: PersistedKey + Debug,
-    C: PersistedContainer<Value = K::Value> + Debug,
-{
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("PersistedLazy")
-            .field("backend", &self.backend)
-            .field("key", &self.key)
-            .field("container", &self.container)
-            .finish()
-    }
-}
-
-// Needed to omit Default bound on B
+// Needed to omit Default bound on S
 impl<S, K, C> Default for PersistedLazy<S, K, C>
 where
     S: PersistedStore<K>,
@@ -379,30 +372,6 @@ where
 {
     fn default() -> Self {
         Self::new(Default::default(), Default::default())
-    }
-}
-
-impl<S, K, C> Deref for PersistedLazy<S, K, C>
-where
-    S: PersistedStore<K>,
-    K: PersistedKey,
-    C: PersistedContainer<Value = K::Value>,
-{
-    type Target = C;
-
-    fn deref(&self) -> &Self::Target {
-        &self.container
-    }
-}
-
-impl<S, K, C> DerefMut for PersistedLazy<S, K, C>
-where
-    S: PersistedStore<K>,
-    K: PersistedKey,
-    C: PersistedContainer<Value = K::Value>,
-{
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.container
     }
 }
 

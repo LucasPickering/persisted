@@ -12,6 +12,7 @@ version = "0.0.1"
 members = ["persisted_derive"]
 
 [dependencies]
+derive_more = {version = "1.0.0-beta.6", default-features = false, features = ["debug", "display", "deref", "deref_mut"]}
 persisted_derive = {path = "./persisted_derive", optional = true}
 serde = {version = "1", default-features = false, features = ["derive"], optional = true}
 
