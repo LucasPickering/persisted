@@ -64,7 +64,7 @@ fn main() {
     let people = PersistedLazy::<Store, _, _>::new(
         SelectedIdKey,
         SelectList {
-            values: person_list.clone(),
+            values: person_list,
             selected_index: 0,
         },
     );

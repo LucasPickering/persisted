@@ -6,13 +6,11 @@ license = "MIT"
 name = "persisted_derive"
 repository = "https://github.com/LucasPickering/persisted"
 version = "0.0.1"
-# Keep in sync w/ rust-toolchain.toml
-rust-version = "1.60.0"
+# Intentionally omit rust-version here, we'll just rely on the root crate
 
 [lib]
 proc-macro = true
 
 [dependencies]
-proc-macro2 = "1" # TODO: needed?
-quote = "1" 
+quote = "1"
 syn = {version = "2", features = ["extra-traits"]}
