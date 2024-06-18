@@ -2,9 +2,12 @@
 
 #![no_std]
 
-use core::{any, fmt::Display, marker::PhantomData};
-// TODO remove dep
-use derive_more::{Deref, DerefMut};
+use core::{
+    any,
+    fmt::{self, Debug, Display},
+    marker::PhantomData,
+    ops::{Deref, DerefMut},
+};
 
 /// Re-export derive macros
 #[cfg(feature = "derive")]
@@ -36,13 +39,18 @@ pub trait PersistedStore<K: PersistedKey> {
 /// A wrapper for any value that will automatically persist it to the state DB.
 /// The value will be loaded from the DB on creation, and saved to the DB on
 /// drop.
-#[derive(derive_more::Debug)]
+///
+/// ## Generic Params
+///
+/// - `B`: The backend type used to persist data. While we don't need access to
+///   the backend itself here, we do need to know its type so we can access it
+///   using [PersistedStore::with_instance] on setup/drop.
+/// - `K`: The type of the persistence key
 pub struct Persisted<B, K>
 where
     B: PersistedStore<K>,
     K: PersistedKey,
 {
-    #[debug(skip)] // This omits the Debug bound on B
     backend: PhantomData<B>,
     key: K,
     /// This is an option so we can move the value out and pass it to the store
@@ -85,6 +93,34 @@ where
     }
 }
 
+// Needed to omit Debug bound on B
+impl<B, K> Debug for Persisted<B, K>
+where
+    B: PersistedStore<K>,
+    K: PersistedKey + Debug,
+    K::Value: Debug,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Persisted")
+            .field("backend", &self.backend)
+            .field("key", &self.key)
+            .field("value", &self.value)
+            .finish()
+    }
+}
+
+// Needed to omit Default bound on B
+impl<B, K> Default for Persisted<B, K>
+where
+    B: PersistedStore<K>,
+    K: PersistedKey + Default,
+    K::Value: Default,
+{
+    fn default() -> Self {
+        Self::new(Default::default(), Default::default())
+    }
+}
+
 impl<B, K> Deref for Persisted<B, K>
 where
     B: PersistedStore<K>,
@@ -109,29 +145,6 @@ where
     }
 }
 
-impl<B, K> Default for Persisted<B, K>
-where
-    B: PersistedStore<K>,
-    K: PersistedKey + Default,
-    K::Value: Default,
-{
-    fn default() -> Self {
-        Self::new(Default::default(), Default::default())
-    }
-}
-
-/// TODO
-impl<B, K> PartialEq<K::Value> for Persisted<B, K>
-where
-    B: PersistedStore<K>,
-    K: PersistedKey,
-    K::Value: PartialEq,
-{
-    fn eq(&self, other: &K::Value) -> bool {
-        self.deref() == other
-    }
-}
-
 /// Save value on drop
 impl<B, K> Drop for Persisted<B, K>
 where
@@ -150,18 +163,14 @@ where
 
 /// TODO
 /// TODO de-dupe code with Persisted
-#[derive(derive_more::Debug, Deref, DerefMut)]
 pub struct PersistedLazy<B, K, C>
 where
     B: PersistedStore<K>,
     K: PersistedKey,
     C: PersistedContainer<Value = K::Value>,
 {
-    #[debug(skip)] // This omits the Debug bound on B
     backend: PhantomData<B>,
     key: K,
-    #[deref]
-    #[deref_mut]
     container: C,
 }
 
@@ -198,6 +207,23 @@ where
     }
 }
 
+// Needed to omit Debug bound on B
+impl<B, K, C> Debug for PersistedLazy<B, K, C>
+where
+    B: PersistedStore<K>,
+    K: PersistedKey + Debug,
+    C: PersistedContainer<Value = K::Value> + Debug,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("PersistedLazy")
+            .field("backend", &self.backend)
+            .field("key", &self.key)
+            .field("container", &self.container)
+            .finish()
+    }
+}
+
+// Needed to omit Default bound on B
 impl<B, K, C> Default for PersistedLazy<B, K, C>
 where
     B: PersistedStore<K>,
@@ -209,16 +235,27 @@ where
     }
 }
 
-/// TODO
-/// TODO is this an anti-pattern? Check PartialEq docs
-impl<B, K, C> PartialEq<C> for PersistedLazy<B, K, C>
+impl<B, K, C> Deref for PersistedLazy<B, K, C>
 where
     B: PersistedStore<K>,
     K: PersistedKey,
-    C: PersistedContainer<Value = K::Value> + PartialEq,
+    C: PersistedContainer<Value = K::Value>,
 {
-    fn eq(&self, other: &C) -> bool {
-        &self.container == other
+    type Target = C;
+
+    fn deref(&self) -> &Self::Target {
+        &self.container
+    }
+}
+
+impl<B, K, C> DerefMut for PersistedLazy<B, K, C>
+where
+    B: PersistedStore<K>,
+    K: PersistedKey,
+    C: PersistedContainer<Value = K::Value>,
+{
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.container
     }
 }
 
@@ -288,7 +325,7 @@ pub trait PersistedContainer {
 /// TODO
 /// TODO add caveat about using types like Option<T>
 #[derive(Debug, Default)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct SingletonKey<V> {
     phantom: PhantomData<V>,
 }
