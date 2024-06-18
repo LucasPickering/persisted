@@ -16,17 +16,12 @@ use core::{
 /// TODO
 /// TODO note about infallibilty
 pub trait PersistedStore<K: PersistedKey> {
-    /// Execute a function with an instance of this store. This is how
-    /// `persisted` will access the store. The closure-based interface provides
-    /// compatibility with [thread locals](std::thread_local).
-    fn with_instance<T>(f: impl FnOnce(&Self) -> T) -> T;
-
     /// Load a persisted value from the store, identified by the given key.
     /// Return `Ok(None)` if the value isn't present.
-    fn load_persisted(&self, key: &K) -> Option<K::Value>;
+    fn load_persisted(key: &K) -> Option<K::Value>;
 
     /// Persist a value in the store, under the given key
-    fn store_persisted(&self, key: &K, value: K::Value);
+    fn store_persisted(key: &K, value: K::Value);
 }
 
 /// A wrapper for any value that will automatically persist it to the state DB.
@@ -62,8 +57,7 @@ where
     /// loaded from the store. If missing, use the given default instead.
     pub fn new(key: K, default: K::Value) -> Self {
         // Fetch persisted value from the backend
-        let value = S::with_instance(|store| store.load_persisted(&key))
-            .unwrap_or(default);
+        let value = S::load_persisted(&key).unwrap_or(default);
 
         Self {
             backend: PhantomData,
@@ -143,7 +137,7 @@ where
 {
     fn drop(&mut self) {
         let value = self.value.take().unwrap();
-        S::with_instance(|store| store.store_persisted(&self.key, value));
+        S::store_persisted(&self.key, value);
     }
 }
 
@@ -170,9 +164,7 @@ where
     /// of the container.
     pub fn new(key: K, mut container: C) -> Self {
         // Fetch persisted value from the backend
-        if let Some(value) =
-            S::with_instance(|store| store.load_persisted(&key))
-        {
+        if let Some(value) = S::load_persisted(&key) {
             container.set_persisted(value);
         }
 
@@ -253,7 +245,7 @@ where
 {
     fn drop(&mut self) {
         let value = self.container.get_persisted();
-        S::with_instance(|store| store.store_persisted(&self.key, value));
+        S::store_persisted(&self.key, value);
     }
 }
 

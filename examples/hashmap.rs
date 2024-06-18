@@ -12,10 +12,8 @@ use std::{
 /// version of the value. Typically you would want to replacing stringification
 /// and parsing with a more robust form of serialization/deserialization, but
 /// this example is simplified to not rely on dependencies.
-///
-/// TODO explain RefCell
 #[derive(Default)]
-struct Store(RefCell<HashMap<(&'static str, String), String>>);
+struct Store;
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 struct PersonId(u64);
@@ -96,7 +94,17 @@ fn main() {
 
 impl Store {
     thread_local! {
-        static INSTANCE: Store = Store::default();
+        /// Thread-load persistence storage. The key is a pair of the key's type
+        /// and content. The value is a stringified version of the value.
+        /// Typically you would want to replace stringification and parsing with
+        /// a more robust form of serialization/deserialization, but this is a
+        /// simplified example.
+        ///
+        /// We need a thread local with a `RefCell` to allow mutable access from
+        /// each persisted value's drop handler, where a reference to the store
+        /// isn't available.
+        static STORE: RefCell<HashMap<(&'static str, String), String>> =
+            Default::default();
     }
 }
 
@@ -106,20 +114,17 @@ where
     K::Value: Display + FromStr,
     <K::Value as FromStr>::Err: Debug,
 {
-    fn with_instance<T>(f: impl FnOnce(&Self) -> T) -> T {
-        Self::INSTANCE.with(f)
+    fn load_persisted(key: &K) -> Option<K::Value> {
+        Self::STORE.with_borrow(|store| {
+            let value_str = store.get(&(K::type_name(), key.to_string()));
+            value_str.map(|value| value.parse().expect("Error parsing value"))
+        })
     }
 
-    fn load_persisted(&self, key: &K) -> Option<K::Value> {
-        let map = self.0.borrow();
-        let value_str = map.get(&(K::type_name(), key.to_string()));
-        value_str.map(|value| value.parse().expect("Error parsing value"))
-    }
-
-    fn store_persisted(&self, key: &K, value: K::Value) {
-        self.0
-            .borrow_mut()
-            .insert((K::type_name(), key.to_string()), value.to_string());
+    fn store_persisted(key: &K, value: K::Value) {
+        Self::STORE.with_borrow_mut(|store| {
+            store.insert((K::type_name(), key.to_string()), value.to_string());
+        })
     }
 }
 

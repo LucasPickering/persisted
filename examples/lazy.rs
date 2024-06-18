@@ -97,22 +97,20 @@ impl Store {
 }
 
 impl PersistedStore<SelectedIdKey> for Store {
-    fn with_instance<T>(f: impl FnOnce(&Self) -> T) -> T {
-        Self::INSTANCE.with(f)
-    }
-
-    fn load_persisted(&self, key: &SelectedIdKey) -> Option<PersonId> {
-        let result = self
-            .0
-            .query_row(
-                "SELECT value FROM persisted WHERE key = :key",
-                named_params! { ":key": SelectedIdKey::type_name() },
-                |row| {
-                    let id: u64 = row.get("value")?;
-                    Ok(PersonId(id))
-                },
-            )
-            .optional();
+    fn load_persisted(key: &SelectedIdKey) -> Option<PersonId> {
+        let result = Self::INSTANCE.with(|store| {
+            store
+                .0
+                .query_row(
+                    "SELECT value FROM persisted WHERE key = :key",
+                    named_params! { ":key": SelectedIdKey::type_name() },
+                    |row| {
+                        let id: u64 = row.get("value")?;
+                        Ok(PersonId(id))
+                    },
+                )
+                .optional()
+        });
         match result {
             Ok(option) => option,
             // You can replace this with logging, tracing, etc.
@@ -125,21 +123,23 @@ impl PersistedStore<SelectedIdKey> for Store {
         }
     }
 
-    fn store_persisted(&self, key: &SelectedIdKey, value: PersonId) {
-        if let Err(error) = self
-            .0
-            .execute(
-                // Upsert!
-                "INSERT INTO persisted (key, value)
-                VALUES (:key, :value)
-                ON CONFLICT DO UPDATE SET value = excluded.value",
-                named_params! {
-                    ":key": SelectedIdKey::type_name(),
-                    ":value": value.0,
-                },
-            )
-            .map(|_| ())
-        {
+    fn store_persisted(key: &SelectedIdKey, value: PersonId) {
+        let result = Self::INSTANCE.with(|store| {
+            store
+                .0
+                .execute(
+                    // Upsert!
+                    "INSERT INTO persisted (key, value)
+                    VALUES (:key, :value)
+                    ON CONFLICT DO UPDATE SET value = excluded.value",
+                    named_params! {
+                        ":key": SelectedIdKey::type_name(),
+                        ":value": value.0,
+                    },
+                )
+                .map(|_| ())
+        });
+        if let Err(error) = result {
             println!("Error occured persisting {key:?}={value:?}: {error}");
         }
     }

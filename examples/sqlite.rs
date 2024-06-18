@@ -84,19 +84,17 @@ impl Store {
 }
 
 impl PersistedStore<SelectedIndexKey> for Store {
-    fn with_instance<T>(f: impl FnOnce(&Self) -> T) -> T {
-        Self::INSTANCE.with(f)
-    }
-
-    fn load_persisted(&self, key: &SelectedIndexKey) -> Option<usize> {
-        let result = self
-            .0
-            .query_row(
-                "SELECT value FROM persisted WHERE key = :key",
-                named_params! { ":key": SelectedIndexKey::type_name() },
-                |row| row.get("value"),
-            )
-            .optional();
+    fn load_persisted(key: &SelectedIndexKey) -> Option<usize> {
+        let result = Self::INSTANCE.with(|store| {
+            store
+                .0
+                .query_row(
+                    "SELECT value FROM persisted WHERE key = :key",
+                    named_params! { ":key": SelectedIndexKey::type_name() },
+                    |row| row.get("value"),
+                )
+                .optional()
+        });
         match result {
             Ok(option) => option,
             // You can replace this with logging, tracing, etc.
@@ -109,21 +107,23 @@ impl PersistedStore<SelectedIndexKey> for Store {
         }
     }
 
-    fn store_persisted(&self, key: &SelectedIndexKey, value: usize) {
-        if let Err(error) = self
-            .0
-            .execute(
-                // Upsert!
-                "INSERT INTO persisted (key, value)
-                VALUES (:key, :value)
-                ON CONFLICT DO UPDATE SET value = excluded.value",
-                named_params! {
-                    ":key": SelectedIndexKey::type_name(),
-                    ":value": value,
-                },
-            )
-            .map(|_| ())
-        {
+    fn store_persisted(key: &SelectedIndexKey, value: usize) {
+        let result = Self::INSTANCE.with(|store| {
+            store
+                .0
+                .execute(
+                    // Upsert!
+                    "INSERT INTO persisted (key, value)
+                    VALUES (:key, :value)
+                    ON CONFLICT DO UPDATE SET value = excluded.value",
+                    named_params! {
+                        ":key": SelectedIndexKey::type_name(),
+                        ":value": value,
+                    },
+                )
+                .map(|_| ())
+        });
+        if let Err(error) = result {
             println!("Error occured persisting {key:?}={value:?}: {error}");
         }
     }
