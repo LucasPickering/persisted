@@ -7,8 +7,7 @@ name = "persisted_derive"
 repository = "https://github.com/LucasPickering/persisted"
 version = "0.0.1"
 # Keep in sync w/ rust-toolchain.toml
-# TODO downgrade as possible
-rust-version = "1.76.0"
+rust-version = "1.60.0"
 
 [lib]
 proc-macro = true
