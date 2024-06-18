@@ -142,7 +142,6 @@ where
 }
 
 /// TODO
-/// TODO de-dupe code with Persisted
 pub struct PersistedLazy<S, K, C>
 where
     S: PersistedStore<K>,
@@ -160,8 +159,10 @@ where
     K: PersistedKey,
     C: PersistedContainer<Value = K::Value>,
 {
-    /// Load the latest persisted value from the DB. If present, set the value
-    /// of the container.
+    /// Initialize a given container whose value will lazily be loaded and
+    /// persisted. If a persisted value is available in the store, it will be
+    /// loaded and used to initialize the container via
+    /// [PersistedContainer::set_persisted].
     pub fn new(key: K, mut container: C) -> Self {
         // Fetch persisted value from the backend
         if let Some(value) = S::load_persisted(&key) {
@@ -175,7 +176,10 @@ where
         }
     }
 
-    /// TODO
+    /// Initialize a new default container whose value will lazily be loaded and
+    /// persisted. If a persisted value is available in the store, it will be
+    /// loaded and used to initialize the container via
+    /// [PersistedContainer::set_persisted].
     pub fn new_default(key: K) -> Self
     where
         C: Default,
@@ -294,9 +298,43 @@ pub trait PersistedContainer {
     fn set_persisted(&mut self, value: Self::Value);
 }
 
-/// TODO
-/// TODO add caveat about using types like Option<T>
-#[derive(Debug, Default)]
+/// A persisted key for a value type that appears only once in a program. The
+/// **name of the value type** is the only information available as the key,
+/// hence why the value type must only be used once.
+///
+/// ## Example
+///
+/// TODO explain
+///
+/// ```
+/// use persisted::{Persisted, PersistedKey, PersistedStore, SingletonKey};
+///
+///
+/// enum Foo {
+///     Bar,
+///     Baz,
+/// }
+///
+/// #[derive(PersistedKey)]
+/// #[persisted(Foo)]
+/// struct FooKey;
+///
+/// // These two values are equivalent
+/// let value1: Persisted<Store, _> =
+///     Persisted::new(SingletonKey::default(), Foo::Bar);
+/// let value2: Persisted<Store, _> = Persisted::new(FooKey, Foo::Bar);
+///
+///
+/// struct Store;
+///
+/// impl<K: PersistedKey> PersistedStore<K> for Store {
+///     fn load_persisted(key: &K) -> Option<K::Value> {
+///         None
+///     }
+///     fn store_persisted(key: &K, value: K::Value) {}
+/// }
+/// ```
+#[derive(Copy, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct SingletonKey<V> {
     phantom: PhantomData<V>,
@@ -306,7 +344,27 @@ impl<V> PersistedKey for SingletonKey<V> {
     type Value = V;
 
     fn type_name() -> &'static str {
+        // If the key is wrapped in a container type like Option, this *will*
+        // include all the generic params, so it remains unique
         any::type_name::<V>()
+    }
+}
+
+// Needed to omit Debug bound on V
+impl<V> Debug for SingletonKey<V> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("SingletonKey")
+            .field("phantom", &self.phantom)
+            .finish()
+    }
+}
+
+// Needed to omit Default bound on V
+impl<V> Default for SingletonKey<V> {
+    fn default() -> Self {
+        Self {
+            phantom: PhantomData,
+        }
     }
 }
 
