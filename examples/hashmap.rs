@@ -4,7 +4,7 @@ use persisted::{Persisted, PersistedKey, PersistedStore};
 use std::{
     cell::RefCell,
     collections::HashMap,
-    fmt::{self, Display},
+    fmt::{self, Debug, Display},
     str::FromStr,
 };
 
@@ -104,29 +104,22 @@ impl<K> PersistedStore<K> for Store
 where
     K: Display + PersistedKey,
     K::Value: Display + FromStr,
-    <K::Value as FromStr>::Err: Display,
+    <K::Value as FromStr>::Err: Debug,
 {
-    type Error = <K::Value as FromStr>::Err;
-
     fn with_instance<T>(f: impl FnOnce(&Self) -> T) -> T {
         Self::INSTANCE.with(f)
     }
 
-    fn load_persisted(&self, key: &K) -> Result<Option<K::Value>, Self::Error> {
+    fn load_persisted(&self, key: &K) -> Option<K::Value> {
         let map = self.0.borrow();
         let value_str = map.get(&(K::type_name(), key.to_string()));
-        value_str.map(|value| value.parse()).transpose()
+        value_str.map(|value| value.parse().expect("Error parsing value"))
     }
 
-    fn store_persisted(
-        &self,
-        key: &K,
-        value: K::Value,
-    ) -> Result<(), Self::Error> {
+    fn store_persisted(&self, key: &K, value: K::Value) {
         self.0
             .borrow_mut()
             .insert((K::type_name(), key.to_string()), value.to_string());
-        Ok(())
     }
 }
 

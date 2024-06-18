@@ -27,7 +27,7 @@ struct SelectList {
     selected_index: usize,
 }
 
-#[derive(PersistedKey)]
+#[derive(Debug, PersistedKey)]
 #[persisted(PersonId)]
 struct SelectedIdKey;
 
@@ -97,17 +97,13 @@ impl Store {
 }
 
 impl PersistedStore<SelectedIdKey> for Store {
-    type Error = rusqlite::Error;
-
     fn with_instance<T>(f: impl FnOnce(&Self) -> T) -> T {
         Self::INSTANCE.with(f)
     }
 
-    fn load_persisted(
-        &self,
-        _key: &SelectedIdKey,
-    ) -> Result<Option<PersonId>, Self::Error> {
-        self.0
+    fn load_persisted(&self, key: &SelectedIdKey) -> Option<PersonId> {
+        let result = self
+            .0
             .query_row(
                 "SELECT value FROM persisted WHERE key = :key",
                 named_params! { ":key": SelectedIdKey::type_name() },
@@ -116,15 +112,22 @@ impl PersistedStore<SelectedIdKey> for Store {
                     Ok(PersonId(id))
                 },
             )
-            .optional()
+            .optional();
+        match result {
+            Ok(option) => option,
+            // You can replace this with logging, tracing, etc.
+            Err(error) => {
+                println!(
+                    "Error occured loading value for key {key:?}: {error}"
+                );
+                None
+            }
+        }
     }
 
-    fn store_persisted(
-        &self,
-        _key: &SelectedIdKey,
-        value: PersonId,
-    ) -> Result<(), Self::Error> {
-        self.0
+    fn store_persisted(&self, key: &SelectedIdKey, value: PersonId) {
+        if let Err(error) = self
+            .0
             .execute(
                 // Upsert!
                 "INSERT INTO persisted (key, value)
@@ -136,6 +139,9 @@ impl PersistedStore<SelectedIdKey> for Store {
                 },
             )
             .map(|_| ())
+        {
+            println!("Error occured persisting {key:?}={value:?}: {error}");
+        }
     }
 }
 

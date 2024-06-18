@@ -2,23 +2,20 @@
 
 #![no_std]
 
+/// Derive macro for [PersistedKey]
+#[cfg(feature = "derive")]
+pub use persisted_derive::PersistedKey;
+
 use core::{
     any,
-    fmt::{self, Debug, Display},
+    fmt::{self, Debug},
     marker::PhantomData,
     ops::{Deref, DerefMut},
 };
 
-/// Re-export derive macros
-#[cfg(feature = "derive")]
-pub use persisted_derive::PersistedKey;
-
 /// TODO
+/// TODO note about infallibilty
 pub trait PersistedStore<K: PersistedKey> {
-    /// The type of error that this store can encounter while saving or loading
-    /// persisted values
-    type Error: Display;
-
     /// Execute a function with an instance of this store. This is how
     /// `persisted` will access the store. The closure-based interface provides
     /// compatibility with [thread locals](std::thread_local).
@@ -26,14 +23,10 @@ pub trait PersistedStore<K: PersistedKey> {
 
     /// Load a persisted value from the store, identified by the given key.
     /// Return `Ok(None)` if the value isn't present.
-    fn load_persisted(&self, key: &K) -> Result<Option<K::Value>, Self::Error>;
+    fn load_persisted(&self, key: &K) -> Option<K::Value>;
 
     /// Persist a value in the store, under the given key
-    fn store_persisted(
-        &self,
-        key: &K,
-        value: K::Value,
-    ) -> Result<(), Self::Error>;
+    fn store_persisted(&self, key: &K, value: K::Value);
 }
 
 /// A wrapper for any value that will automatically persist it to the state DB.
@@ -42,16 +35,17 @@ pub trait PersistedStore<K: PersistedKey> {
 ///
 /// ## Generic Params
 ///
-/// - `B`: The backend type used to persist data. While we don't need access to
+/// - `S`: The backend type used to persist data. While we don't need access to
 ///   the backend itself here, we do need to know its type so we can access it
 ///   using [PersistedStore::with_instance] on setup/drop.
-/// - `K`: The type of the persistence key
-pub struct Persisted<B, K>
+/// - `K`: The type of the persistence key. The associated `Value` type will be
+///   the type of the contained value.
+pub struct Persisted<S, K>
 where
-    B: PersistedStore<K>,
+    S: PersistedStore<K>,
     K: PersistedKey,
 {
-    backend: PhantomData<B>,
+    backend: PhantomData<S>,
     key: K,
     /// This is an option so we can move the value out and pass it to the store
     /// during drop
@@ -59,21 +53,17 @@ where
     value: Option<K::Value>,
 }
 
-impl<B, K> Persisted<B, K>
+impl<S, K> Persisted<S, K>
 where
-    B: PersistedStore<K>,
+    S: PersistedStore<K>,
     K: PersistedKey,
 {
     /// Initialize a new persisted value. The latest persisted value will be
     /// loaded from the store. If missing, use the given default instead.
     pub fn new(key: K, default: K::Value) -> Self {
         // Fetch persisted value from the backend
-        let value = match B::with_instance(|store| store.load_persisted(&key)) {
-            Ok(Some(value)) => value,
-            Ok(None) => default,
-            // TODO tracing
-            Err(error) => panic!("{error}"),
-        };
+        let value = S::with_instance(|store| store.load_persisted(&key))
+            .unwrap_or(default);
 
         Self {
             backend: PhantomData,
@@ -94,9 +84,9 @@ where
 }
 
 // Needed to omit Debug bound on B
-impl<B, K> Debug for Persisted<B, K>
+impl<S, K> Debug for Persisted<S, K>
 where
-    B: PersistedStore<K>,
+    S: PersistedStore<K>,
     K: PersistedKey + Debug,
     K::Value: Debug,
 {
@@ -110,9 +100,9 @@ where
 }
 
 // Needed to omit Default bound on B
-impl<B, K> Default for Persisted<B, K>
+impl<S, K> Default for Persisted<S, K>
 where
-    B: PersistedStore<K>,
+    S: PersistedStore<K>,
     K: PersistedKey + Default,
     K::Value: Default,
 {
@@ -121,9 +111,9 @@ where
     }
 }
 
-impl<B, K> Deref for Persisted<B, K>
+impl<S, K> Deref for Persisted<S, K>
 where
-    B: PersistedStore<K>,
+    S: PersistedStore<K>,
     K: PersistedKey,
 {
     type Target = K::Value;
@@ -134,9 +124,9 @@ where
     }
 }
 
-impl<B, K> DerefMut for Persisted<B, K>
+impl<S, K> DerefMut for Persisted<S, K>
 where
-    B: PersistedStore<K>,
+    S: PersistedStore<K>,
     K: PersistedKey,
 {
     fn deref_mut(&mut self) -> &mut Self::Target {
@@ -146,37 +136,33 @@ where
 }
 
 /// Save value on drop
-impl<B, K> Drop for Persisted<B, K>
+impl<S, K> Drop for Persisted<S, K>
 where
-    B: PersistedStore<K>,
+    S: PersistedStore<K>,
     K: PersistedKey,
 {
     fn drop(&mut self) {
         let value = self.value.take().unwrap();
-        if let Err(_error) =
-            B::with_instance(|store| store.store_persisted(&self.key, value))
-        {
-            // TODO tracing
-        }
+        S::with_instance(|store| store.store_persisted(&self.key, value));
     }
 }
 
 /// TODO
 /// TODO de-dupe code with Persisted
-pub struct PersistedLazy<B, K, C>
+pub struct PersistedLazy<S, K, C>
 where
-    B: PersistedStore<K>,
+    S: PersistedStore<K>,
     K: PersistedKey,
     C: PersistedContainer<Value = K::Value>,
 {
-    backend: PhantomData<B>,
+    backend: PhantomData<S>,
     key: K,
     container: C,
 }
 
-impl<B, K, C> PersistedLazy<B, K, C>
+impl<S, K, C> PersistedLazy<S, K, C>
 where
-    B: PersistedStore<K>,
+    S: PersistedStore<K>,
     K: PersistedKey,
     C: PersistedContainer<Value = K::Value>,
 {
@@ -184,11 +170,10 @@ where
     /// of the container.
     pub fn new(key: K, mut container: C) -> Self {
         // Fetch persisted value from the backend
-        match B::with_instance(|store| store.load_persisted(&key)) {
-            Ok(Some(value)) => container.set_persisted(value),
-            Ok(None) => {}
-            // TODO tracing
-            Err(error) => panic!("{error}"),
+        if let Some(value) =
+            S::with_instance(|store| store.load_persisted(&key))
+        {
+            container.set_persisted(value);
         }
 
         Self {
@@ -208,9 +193,9 @@ where
 }
 
 // Needed to omit Debug bound on B
-impl<B, K, C> Debug for PersistedLazy<B, K, C>
+impl<S, K, C> Debug for PersistedLazy<S, K, C>
 where
-    B: PersistedStore<K>,
+    S: PersistedStore<K>,
     K: PersistedKey + Debug,
     C: PersistedContainer<Value = K::Value> + Debug,
 {
@@ -224,9 +209,9 @@ where
 }
 
 // Needed to omit Default bound on B
-impl<B, K, C> Default for PersistedLazy<B, K, C>
+impl<S, K, C> Default for PersistedLazy<S, K, C>
 where
-    B: PersistedStore<K>,
+    S: PersistedStore<K>,
     K: PersistedKey + Default,
     C: PersistedContainer<Value = K::Value> + Default,
 {
@@ -235,9 +220,9 @@ where
     }
 }
 
-impl<B, K, C> Deref for PersistedLazy<B, K, C>
+impl<S, K, C> Deref for PersistedLazy<S, K, C>
 where
-    B: PersistedStore<K>,
+    S: PersistedStore<K>,
     K: PersistedKey,
     C: PersistedContainer<Value = K::Value>,
 {
@@ -248,9 +233,9 @@ where
     }
 }
 
-impl<B, K, C> DerefMut for PersistedLazy<B, K, C>
+impl<S, K, C> DerefMut for PersistedLazy<S, K, C>
 where
-    B: PersistedStore<K>,
+    S: PersistedStore<K>,
     K: PersistedKey,
     C: PersistedContainer<Value = K::Value>,
 {
@@ -260,19 +245,15 @@ where
 }
 
 /// Save value on drop
-impl<B, K, C> Drop for PersistedLazy<B, K, C>
+impl<S, K, C> Drop for PersistedLazy<S, K, C>
 where
-    B: PersistedStore<K>,
+    S: PersistedStore<K>,
     K: PersistedKey,
     C: PersistedContainer<Value = K::Value>,
 {
     fn drop(&mut self) {
         let value = self.container.get_persisted();
-        if let Err(_error) =
-            B::with_instance(|store| store.store_persisted(&self.key, value))
-        {
-            // TODO tracing
-        }
+        S::with_instance(|store| store.store_persisted(&self.key, value));
     }
 }
 
@@ -289,7 +270,7 @@ pub trait PersistedKey {
     /// particular important for unit keys. For example, if your store persists
     /// data as JSON,  a serialized key may be just an ID, e.g. `3`. This alone
     /// is not a useful key because it's ambiguous in the scope of your entire
-    /// program. [type_name] allows you to include the key type, so you could
+    /// program. This method allows you to include the key type, so you could
     /// serialize the same key as `["Person", 3]` or `{"type": "Person", "key":
     /// 3}`. It's up to the [PersistedStore] implementation to decide how to
     /// actually employ this function, it's provided merely as a utility.
@@ -317,8 +298,7 @@ pub trait PersistedContainer {
     /// Get the current value to persist in the store
     fn get_persisted(&self) -> Self::Value;
 
-    /// Set the container's value, based on value loaded from the persistence
-    /// store
+    /// Set the container's value, based on value loaded from the store
     fn set_persisted(&mut self, value: Self::Value);
 }
 

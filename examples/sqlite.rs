@@ -26,7 +26,7 @@ struct SelectList<T> {
 /// Persist the selected value in the list by storing its index. This is simple
 /// but relies on the list keeping the same items, in the same order, between
 /// sessions.
-#[derive(PersistedKey)]
+#[derive(Debug, PersistedKey)]
 #[persisted(usize)]
 struct SelectedIndexKey;
 
@@ -84,31 +84,34 @@ impl Store {
 }
 
 impl PersistedStore<SelectedIndexKey> for Store {
-    type Error = rusqlite::Error;
-
     fn with_instance<T>(f: impl FnOnce(&Self) -> T) -> T {
         Self::INSTANCE.with(f)
     }
 
-    fn load_persisted(
-        &self,
-        _key: &SelectedIndexKey,
-    ) -> Result<Option<usize>, Self::Error> {
-        self.0
+    fn load_persisted(&self, key: &SelectedIndexKey) -> Option<usize> {
+        let result = self
+            .0
             .query_row(
                 "SELECT value FROM persisted WHERE key = :key",
                 named_params! { ":key": SelectedIndexKey::type_name() },
                 |row| row.get("value"),
             )
-            .optional()
+            .optional();
+        match result {
+            Ok(option) => option,
+            // You can replace this with logging, tracing, etc.
+            Err(error) => {
+                println!(
+                    "Error occured loading value for key {key:?}: {error}"
+                );
+                None
+            }
+        }
     }
 
-    fn store_persisted(
-        &self,
-        _key: &SelectedIndexKey,
-        index: usize,
-    ) -> Result<(), Self::Error> {
-        self.0
+    fn store_persisted(&self, key: &SelectedIndexKey, value: usize) {
+        if let Err(error) = self
+            .0
             .execute(
                 // Upsert!
                 "INSERT INTO persisted (key, value)
@@ -116,10 +119,13 @@ impl PersistedStore<SelectedIndexKey> for Store {
                 ON CONFLICT DO UPDATE SET value = excluded.value",
                 named_params! {
                     ":key": SelectedIndexKey::type_name(),
-                    ":value": index,
+                    ":value": value,
                 },
             )
             .map(|_| ())
+        {
+            println!("Error occured persisting {key:?}={value:?}: {error}");
+        }
     }
 }
 
