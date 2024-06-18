@@ -1,4 +1,7 @@
-//! Persist a simple value via SQLite
+//! Persist values into a hashmap. For most use cases this is not practical
+//! because the hashmap will be lost on program shutdown anyway. However, this
+//! pattern is effective if you want to persist values between multiple life
+//! cycles of some subsection of your program, within the span of one process.
 
 use persisted::{Persisted, PersistedKey, PersistedStore};
 use std::{
@@ -21,7 +24,6 @@ struct Store(RefCell<HashMap<(&'static str, String), String>>);
 #[derive(Copy, Clone, Debug, PartialEq)]
 struct PersonId(u64);
 
-/// TODO
 #[derive(Debug)]
 #[allow(unused)]
 struct Person {
@@ -43,7 +45,7 @@ impl Person {
     }
 }
 
-/// TODO
+/// A list of items, with one item selected
 struct SelectList<T> {
     values: Vec<T>,
     selected_index: Persisted<Store, SelectedIndexKey>,

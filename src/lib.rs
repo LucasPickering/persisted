@@ -1,6 +1,122 @@
-//! TODO
-
 #![no_std]
+// TODO integration tests
+
+//! `persisted` is a library for persisting arbitrary values in your program so
+//! they can easily be restored later. The main goals of the library are:
+//!
+//! - Explicitness: You define exactly what is persisted, and its types
+//! - Ease of use: Thin wrappers make persisting values easy
+//! - Flexible: `persisted` is data store-agnostic; use any persistence scheme
+//!   you want, including a database, key-value store, etc.
+//!
+//! This library is essentially a middleman between your values and your data
+//! store. You define your data structures and how your data should be saved,
+//! and `persisted` makes sure the data is loaded and stored appropriately.
+//!
+//! `persisted` was designed originally for use in
+//! [Slumber](https://crates.io/crates/slumber), a TUI HTTP client. As such, its
+//! main use case is for persisting values between sessions in a user interface.
+//! It is very flexible though, and could be used for persisting any type of
+//! value in any type of context. `no_std` support means it can even be used in
+//! embedded contexts.
+//!
+//! ## Example
+//!
+//! Here's an example of a very simple persistence scheme. The store keeps just
+//! a single value.
+//!
+//! ```
+//! use core::cell::Cell;
+//! use persisted::{Persisted, PersistedKey, PersistedStore};
+//!
+//! /// Store index of the selected person
+//! #[derive(Default)]
+//! struct Store(Cell<Option<usize>>);
+//!
+//! impl Store {
+//!     thread_local! {
+//!         static INSTANCE: Store = Default::default();
+//!     }
+//! }
+//!
+//! impl PersistedStore<SelectedIndexKey> for Store {
+//!     fn load_persisted(_key: &SelectedIndexKey) -> Option<usize> {
+//!         Self::INSTANCE.with(|store| store.0.get())
+//!     }
+//!
+//!     fn store_persisted(_key: &SelectedIndexKey, value: usize) {
+//!         Self::INSTANCE.with(|store| store.0.set(Some(value)))
+//!     }
+//! }
+//!
+//! /// Persist the selected value in the list by storing its index. This is simple
+//! /// but relies on the list keeping the same items, in the same order, between
+//! /// sessions.
+//! #[derive(PersistedKey)]
+//! #[persisted(usize)]
+//! struct SelectedIndexKey;
+//!
+//! #[derive(Clone, Debug)]
+//! #[allow(unused)]
+//! struct Person {
+//!     name: String,
+//!     age: u32,
+//! }
+//!
+//! /// A list of items, with one item selected
+//! struct SelectList<T> {
+//!     values: Vec<T>,
+//!     selected_index: Persisted<Store, SelectedIndexKey>,
+//! }
+//!
+//! impl<T> SelectList<T> {
+//!     fn new(values: Vec<T>) -> Self {
+//!         Self {
+//!             values,
+//!             selected_index: Persisted::new(SelectedIndexKey, 0),
+//!         }
+//!     }
+//!
+//!     fn selected(&self) -> &T {
+//!         &self.values[*self.selected_index]
+//!     }
+//! }
+//!
+//! let list = vec![
+//!     Person {
+//!         name: "Fred".into(),
+//!         age: 17,
+//!     },
+//!     Person {
+//!         name: "Susan".into(),
+//!         age: 29,
+//!     },
+//!     Person {
+//!         name: "Ulysses".into(),
+//!         age: 40,
+//!     },
+//! ];
+//!
+//! let mut people = SelectList::new(list.clone());
+//! *people.selected_index = 1;
+//! println!("Selected: {}", people.selected().name);
+//! // Selected: Susan
+//! drop(people);
+//!
+//! let people = SelectList::new(list);
+//! // The previous value was restored
+//! assert_eq!(*people.selected_index, 1);
+//! println!("Selected: {}", people.selected().name);
+//! // Selected: Susan
+//! ```
+//!
+//! ## Concepts
+//!
+//! TODO
+//!
+//! ## How Does It Work?
+//!
+//! TODO
 
 /// Derive macro for [PersistedKey]
 #[cfg(feature = "derive")]
@@ -13,8 +129,36 @@ use core::{
     ops::{Deref, DerefMut},
 };
 
-/// TODO
-/// TODO note about infallibilty
+/// A trait for any data store capable of persisting data. A store is the layer
+/// that saves data. It could save it in memory, on disk, over the network, etc.
+/// The generic parameter `K` defines which keys this store is capable of
+/// saving. For example, if your storage mechanism involves stringifyin keys,
+/// your implementation may look like:
+///
+/// ```ignore
+/// struct Store;
+///
+/// impl<K: PersistedKey + Display> for Store {
+///     ...
+/// }
+/// ```
+///
+/// This trait enforces three key requirements on all implementors:
+///
+/// - It is statically accessible, i.e. you can load and store data without a
+///   reference to the store
+/// - It does not return errors. This does **not** mean it is infallible; it
+///   just means that if errors can occur during load/store, they are handled
+///   within the implementation rather than propagated. For example, they could
+///   be logged for debugging.
+/// - Its is synchronous. `async` load and store operations are not supported.
+///
+/// All three of these requirements derive from how the store is accessed.
+/// Values are loaded during initialization by [Persisted]/[PersistedLazy], and
+/// saved by their respective [Drop] implementations. In both cases, there is no
+/// reference to the store available, and no way of propagating errors or
+/// futures. For this reason, your store access should be _fast_, to prevent
+/// latency in your program.
 pub trait PersistedStore<K: PersistedKey> {
     /// Load a persisted value from the store, identified by the given key.
     /// Return `Ok(None)` if the value isn't present.
@@ -24,17 +168,22 @@ pub trait PersistedStore<K: PersistedKey> {
     fn store_persisted(key: &K, value: K::Value);
 }
 
-/// A wrapper for any value that will automatically persist it to the state DB.
-/// The value will be loaded from the DB on creation, and saved to the DB on
+/// A wrapper that will automatically persist its contained value to the
+/// store. The value will be loaded from the store on creation, and saved on
 /// drop.
 ///
 /// ## Generic Params
 ///
 /// - `S`: The backend type used to persist data. While we don't need access to
-///   the backend itself here, we do need to know its type so we can access it
-///   using [PersistedStore::with_instance] on setup/drop.
+///   an instance of the backend, we do need to know its type so we can access
+///   its static functions on setup/drop.
 /// - `K`: The type of the persistence key. The associated `Value` type will be
 ///   the type of the contained value.
+///
+/// ## Accessing
+///
+/// The contained value is accessed and modified via [Deref] and [DerefMut]
+/// implementations, respectively.
 pub struct Persisted<S, K>
 where
     S: PersistedStore<K>,
@@ -141,7 +290,24 @@ where
     }
 }
 
-/// TODO
+/// A wrapper that will automatically persist its contained value to the
+/// store. The value will be loaded from the store on creation, and saved on
+/// drop.
+///
+/// ## Generic Params
+///
+/// - `S`: The backend type used to persist data. While we don't need access to
+///   an instance of the backend, we do need to know its type so we can access
+///   its static functions on setup/drop.
+/// - `K`: The type of the persistence key
+/// - `C`: The type of the wrapping container (see [PersistedContainer]). The
+///   type of the container's persisted value must match the expected value for
+///   the key. In other words, `K::Value` must equal `C::Value`.
+///
+/// ## Accessing
+///
+/// The inner container is accessed and modified via [Deref] and [DerefMut]
+/// implementations, respectively.
 pub struct PersistedLazy<S, K, C>
 where
     S: PersistedStore<K>,
@@ -272,7 +438,7 @@ pub trait PersistedKey {
     /// actually employ this function, it's provided merely as a utility.
     ///
     /// In most cases this you can rely on the derive implementation, which uses
-    /// [std::any::type_name]. However, for wrapper key types (e.g.
+    /// [core::any::type_name]. However, for wrapper key types (e.g.
     /// [SingletonKey]), this should return the name of the wrapped type.
     ///
     /// Using this is *not* necessary if you use a persistence format that
@@ -304,11 +470,8 @@ pub trait PersistedContainer {
 ///
 /// ## Example
 ///
-/// TODO explain
-///
 /// ```
 /// use persisted::{Persisted, PersistedKey, PersistedStore, SingletonKey};
-///
 ///
 /// enum Foo {
 ///     Bar,
@@ -370,5 +533,20 @@ impl<V> Default for SingletonKey<V> {
 
 #[cfg(test)]
 mod tests {
-    // TODO
+    use super::*;
+
+    #[test]
+    fn test_singleton_key() {
+        struct Foo;
+
+        assert_eq!(
+            SingletonKey::<Foo>::type_name(),
+            "persisted::tests::test_singleton_key::Foo"
+        );
+        // Wrapped types also work
+        assert_eq!(
+            SingletonKey::<Option<Foo>>::type_name(),
+            "core::option::Option<persisted::tests::test_singleton_key::Foo>"
+        )
+    }
 }

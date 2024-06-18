@@ -12,7 +12,6 @@ struct Store(Connection);
 #[derive(Copy, Clone, Debug, PartialEq)]
 struct PersonId(u64);
 
-/// TODO
 #[derive(Clone, Debug)]
 #[allow(unused)]
 struct Person {
@@ -21,7 +20,7 @@ struct Person {
     age: u32,
 }
 
-/// TODO
+/// A list of items, with one item selected
 struct SelectList {
     values: Vec<Person>,
     selected_index: usize,

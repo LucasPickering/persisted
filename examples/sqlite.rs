@@ -3,7 +3,6 @@
 use persisted::{Persisted, PersistedKey, PersistedStore};
 use rusqlite::{named_params, Connection, OptionalExtension};
 
-/// TODO
 struct Store(Connection);
 
 #[derive(Copy, Clone, Debug, PartialEq)]
@@ -17,7 +16,7 @@ struct Person {
     age: u32,
 }
 
-/// TODO
+/// A list of items, with one item selected
 struct SelectList<T> {
     values: Vec<T>,
     selected_index: Persisted<Store, SelectedIndexKey>,
