@@ -9,16 +9,38 @@
 //! - Flexible: `persisted` is data store-agnostic; use any persistence scheme
 //!   you want, including a database, key-value store, etc.
 //!
-//! This library is essentially a middleman between your values and your data
-//! store. You define your data structures and how your data should be saved,
-//! and `persisted` makes sure the data is loaded and stored appropriately.
-//!
 //! `persisted` was designed originally for use in
 //! [Slumber](https://crates.io/crates/slumber), a TUI HTTP client. As such, its
 //! main use case is for persisting values between sessions in a user interface.
 //! It is very flexible though, and could be used for persisting any type of
 //! value in any type of context. `no_std` support means it can even be used in
 //! embedded contexts.
+//!
+//! ## Concepts
+//!
+//! `persisted` serves as a middleman between your values and your data store.
+//! You define your data structures and how your data should be saved,
+//! and `persisted` makes sure the data is loaded and stored appropriately. The
+//! key concepts are:
+//!
+//! - Data wrappers: [Persisted] and [PersistedLazy]
+//!     - These wrap your data to automatically restore and save values from/to
+//!       the store
+//! - Data store: any implementor of [PersistedStore]
+//! - Key: A unique identifier for a value in the store. Each persisted value
+//!   must have its own key. Key types must implement [PersistedKey].
+//!
+//! ## How Does It Work?
+//!
+//! `persisted` works by wrapping each persisted value in either [Persisted] or
+//! [PersistedLazy]. The wrapper is created with a key and optionally a default
+//! value. A request is made to the store to load the most recent value for the
+//! key, and if present that value is used. When the wrapper is dropped, the
+//! a request is made to the store to save the final value.
+//!
+//! Because the store is accessed from constructors and destructors, it cannot
+//! be passed around and must be reachable statically. The easiest way to do
+//! this is with either a `static` or `thread_local` definition of your store.
 //!
 //! ## Example
 //!
@@ -109,14 +131,6 @@
 //! println!("Selected: {}", people.selected().name);
 //! // Selected: Susan
 //! ```
-//!
-//! ## Concepts
-//!
-//! TODO
-//!
-//! ## How Does It Work?
-//!
-//! TODO
 
 /// Derive macro for [PersistedKey]
 #[cfg(feature = "derive")]
@@ -182,8 +196,8 @@ pub trait PersistedStore<K: PersistedKey> {
 ///
 /// ## Accessing
 ///
-/// The contained value is accessed and modified via [Deref] and [DerefMut]
-/// implementations, respectively.
+/// The inner value is accessed and modified transparently via [Deref] and
+/// [DerefMut] implementations
 ///
 /// ## Cloning
 ///
@@ -286,9 +300,18 @@ where
     }
 }
 
-/// A wrapper that will automatically persist its contained value to the
-/// store. The value will be loaded from the store on creation, and saved on
-/// drop.
+/// Similar to [Persisted], but the value that's sent to the store is not the
+/// same as the value stored in memory. Instead, the value is computed at save
+/// time by [PersistedContainer::get_persisted]. Similarly, the persisted value
+/// that's loaded at initialization isn't stored directly in the container.
+/// Instead, [PersistedContainer::set_persisted] determines how to initialize
+/// state based on it.
+///
+/// This is useful if the value you want to store is some derivation of the
+/// value you keep in memory. For example, storing which item in a list is
+/// selected: if you store the index of the selected item in memory but want to
+/// persist the *ID* of the selected item so it's resilient to re-ordering, you
+/// can use this.
 ///
 /// ## Generic Params
 ///
@@ -302,8 +325,8 @@ where
 ///
 /// ## Accessing
 ///
-/// The inner container is accessed and modified via [Deref] and [DerefMut]
-/// implementations, respectively.
+/// The inner container is accessed and modified transparently via [Deref] and
+/// [DerefMut] implementations.
 ///
 /// ## Cloning
 ///
@@ -312,6 +335,121 @@ where
 /// dropped, whichever is dropped first would have its persisted value
 /// overwritten by the other. It's unlikely this is the desired behavior, and
 /// therefore is not provided.
+///
+/// ## Example
+///
+/// ```
+/// use persisted::{
+///     PersistedContainer, PersistedKey, PersistedLazy, PersistedStore,
+/// };
+/// use std::cell::Cell;
+///
+/// /// Persist just the stored ID
+/// #[derive(Default)]
+/// struct Store(Cell<Option<PersonId>>);
+///
+/// impl Store {
+///     thread_local! {
+///         static INSTANCE: Store = Default::default();
+///     }
+/// }
+///
+/// impl PersistedStore<SelectedIdKey> for Store {
+///     fn load_persisted(_key: &SelectedIdKey) -> Option<PersonId> {
+///         Self::INSTANCE.with(|store| store.0.get())
+///     }
+///
+///     fn store_persisted(_key: &SelectedIdKey, value: PersonId) {
+///         Self::INSTANCE.with(|store| store.0.set(Some(value)))
+///     }
+/// }
+///
+/// #[derive(Copy, Clone, Debug, PartialEq)]
+/// struct PersonId(u64);
+///
+/// #[derive(Clone, Debug)]
+/// #[allow(unused)]
+/// struct Person {
+///     id: PersonId,
+///     name: String,
+///     age: u32,
+/// }
+///
+/// #[derive(Debug, PersistedKey)]
+/// #[persisted(PersonId)]
+/// struct SelectedIdKey;
+///
+/// /// A list of items, with one item selected
+/// struct SelectList {
+///     values: Vec<Person>,
+///     selected_index: usize,
+/// }
+///
+/// impl SelectList {
+///     fn selected(&self) -> &Person {
+///         &self.values[self.selected_index]
+///     }
+/// }
+///
+/// impl PersistedContainer for SelectList {
+///     type Value = PersonId;
+///
+///     fn get_persisted(&self) -> Self::Value {
+///         self.selected().id
+///     }
+///
+///     fn set_persisted(&mut self, value: Self::Value) {
+///         // Find selected person by ID
+///         self.selected_index = self
+///             .values
+///             .iter()
+///             .enumerate()
+///             .find(|(_, person)| person.id == value)
+///             .map(|(i, _)| i)
+///             .unwrap_or_default();
+///     }
+/// }
+///
+/// let person_list = vec![
+///     Person {
+///         id: PersonId(23089),
+///         name: "Fred".into(),
+///         age: 17,
+///     },
+///     Person {
+///         id: PersonId(28833),
+///         name: "Susan".into(),
+///         age: 29,
+///     },
+///     Person {
+///         id: PersonId(93383),
+///         name: "Ulysses".into(),
+///         age: 40,
+///     },
+/// ];
+///
+/// let mut people = PersistedLazy::<Store, _, _>::new(
+///     SelectedIdKey,
+///     SelectList {
+///         values: person_list.clone(),
+///         selected_index: 0,
+///     },
+/// );
+/// people.selected_index = 1;
+/// assert_eq!(people.selected().id.0, 28833);
+/// drop(people);
+///
+/// let people = PersistedLazy::<Store, _, _>::new(
+///     SelectedIdKey,
+///     SelectList {
+///         values: person_list,
+///         selected_index: 0,
+///     },
+/// );
+/// // The previous value was restored
+/// assert_eq!(people.selected_index, 1);
+/// assert_eq!(people.selected().id.0, 28833);
+/// ```
 #[derive(derive_more::Debug, Deref, DerefMut, Display)]
 #[display("{}", container)]
 pub struct PersistedLazy<S, K, C>
@@ -388,7 +526,40 @@ where
     }
 }
 
-/// TODO
+/// A unique key mapped to a persisted state value in your program. A key can
+/// be any Rust value. Unit keys are useful for top-level fields that appear
+/// only once in state. Keys can also carry additional data, such as an index or
+/// identifier.
+///
+/// It's very uncommon that you need to implement this trait yourself. In most
+/// cases you can use the derive macro (requires `derive` feature to be
+/// enabled).
+///
+/// Regardless of the structure of your keys, you should ensure that each key
+/// (not key *type*) appears only once in your state. More formally, for all
+/// keys in your state, `key1 != key2`. If two identical keys exist, they will
+/// conflict with each other for the same storage slot in the persistence store.
+///
+/// Some examples of keys:
+///
+/// ```
+/// use persisted::PersistedKey;
+///
+/// #[derive(PersistedKey)]
+/// #[persisted(u64)]
+/// struct SelectedFrobnicatorKey;
+///
+/// #[derive(PersistedKey)]
+/// #[persisted(bool)]
+/// struct FrobnicatorEnabled(u64);
+///
+/// #[derive(PersistedKey)]
+/// #[persisted(bool)]
+/// enum FrobnicatorComponentEnabled {
+///     Component1,
+///     Component2,
+/// }
+/// ```
 pub trait PersistedKey {
     /// The type of the persisted value associated with this key
     type Value;

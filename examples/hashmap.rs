@@ -21,6 +21,34 @@ use std::{
 #[derive(Default)]
 struct Store(RefCell<HashMap<(&'static str, String), String>>);
 
+impl Store {
+    thread_local! {
+        static INSTANCE: Store = Default::default();
+    }
+}
+
+impl<K> PersistedStore<K> for Store
+where
+    K: Display + PersistedKey,
+    K::Value: Display + FromStr,
+    <K::Value as FromStr>::Err: Debug,
+{
+    fn load_persisted(key: &K) -> Option<K::Value> {
+        Self::INSTANCE.with(|store| {
+            let map = store.0.borrow();
+            let value_str = map.get(&(K::type_name(), key.to_string()));
+            value_str.map(|value| value.parse().expect("Error parsing value"))
+        })
+    }
+
+    fn store_persisted(key: &K, value: K::Value) {
+        Self::INSTANCE.with(|store| {
+            let mut map = store.0.borrow_mut();
+            map.insert((K::type_name(), key.to_string()), value.to_string());
+        })
+    }
+}
+
 #[derive(Copy, Clone, Debug, PartialEq)]
 struct PersonId(u64);
 
@@ -49,6 +77,19 @@ impl Person {
 struct SelectList<T> {
     values: Vec<T>,
     selected_index: Persisted<Store, SelectedIndexKey>,
+}
+
+impl<T> SelectList<T> {
+    fn new(values: Vec<T>) -> Self {
+        Self {
+            values,
+            selected_index: Persisted::new(SelectedIndexKey, 0),
+        }
+    }
+
+    fn selected(&self) -> &T {
+        &self.values[*self.selected_index]
+    }
 }
 
 /// Persist the selected value in the list by storing its index. This is simple
@@ -95,45 +136,4 @@ fn main() {
     assert_eq!(*people.selected_index, 1);
     assert!(!*people.values[1].enabled);
     println!("Selected: {:?}", people.selected());
-}
-
-impl Store {
-    thread_local! {
-        static INSTANCE: Store = Default::default();
-    }
-}
-
-impl<K> PersistedStore<K> for Store
-where
-    K: Display + PersistedKey,
-    K::Value: Display + FromStr,
-    <K::Value as FromStr>::Err: Debug,
-{
-    fn load_persisted(key: &K) -> Option<K::Value> {
-        Self::INSTANCE.with(|store| {
-            let map = store.0.borrow();
-            let value_str = map.get(&(K::type_name(), key.to_string()));
-            value_str.map(|value| value.parse().expect("Error parsing value"))
-        })
-    }
-
-    fn store_persisted(key: &K, value: K::Value) {
-        Self::INSTANCE.with(|store| {
-            let mut map = store.0.borrow_mut();
-            map.insert((K::type_name(), key.to_string()), value.to_string());
-        })
-    }
-}
-
-impl<T> SelectList<T> {
-    fn new(values: Vec<T>) -> Self {
-        Self {
-            values,
-            selected_index: Persisted::new(SelectedIndexKey, 0),
-        }
-    }
-
-    fn selected(&self) -> &T {
-        &self.values[*self.selected_index]
-    }
 }
