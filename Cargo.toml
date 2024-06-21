@@ -13,7 +13,7 @@ members = ["persisted_derive"]
 
 [dependencies]
 derive_more = {version = "1.0.0-beta.6", default-features = false, features = ["debug", "display", "deref", "deref_mut"]}
-persisted_derive = {path = "./persisted_derive", optional = true}
+persisted_derive = {path = "./persisted_derive", version = "=0.0.1", optional = true}
 serde = {version = "1", default-features = false, features = ["derive"], optional = true}
 
 [dev-dependencies]
@@ -25,7 +25,7 @@ default = ["derive"]
 derive = ["dep:persisted_derive"]
 serde = ["dep:serde"]
 
-[workspace.metadata.release]
+[package.metadata.release]
 pre-release-replacements = [
   {file = "CHANGELOG.md", search = "## \\[Unreleased\\] - ReleaseDate", replace = "## [Unreleased] - ReleaseDate\n\n## [{{version}}] - {{date}}"},
 ]
