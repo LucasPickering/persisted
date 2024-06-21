@@ -1,5 +1,4 @@
 #![no_std]
-// TODO integration tests
 
 //! `persisted` is a library for persisting arbitrary values in your program so
 //! they can easily be restored later. The main goals of the library are:
