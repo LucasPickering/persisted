@@ -1,18 +1,9 @@
-# rust-config
+# persisted
 
-Common CI and crate configuration for my Rust projects. This is meant to be pulled in as a separate git remote in your repo.
+![Test CI](https://github.com/github/docs/actions/workflows/test.yml/badge.svg)
+![crates.io](https://img.shields.io/crates/v/persisted.svg)
+![docs.rs](https://img.shields.io/docsrs/persisted)
 
-Initial setup for a repo:
+`persisted` is a Rust library that makes it easy and quick to save arbitrary program state. Its simple and flexible design means you bring your own data store. You tell `persisted` how to save data and what you want to save, and it figures out the rest.
 
-```
-git remote add ci git@github.com:LucasPickering/rust-config.git
-git fetch ci
-git cherry-pick ci/master
-```
-
-Pulling in new chains:
-
-```
-git fetch ci
-git merge ci/master
-```
+For examples, see the `examples/` directory or the [documentation](https://docs.rs/persisted).

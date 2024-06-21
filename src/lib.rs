@@ -130,6 +130,12 @@
 //! println!("Selected: {}", people.selected().name);
 //! // Selected: Susan
 //! ```
+//!
+//! ### Feature Flags
+//!
+//! `persisted` supports the following Cargo features:
+//! - `derive` (default): Enable derive macros
+//! - `serde`: Enable `Serialize/Deserialize` implementations
 
 /// Derive macro for [PersistedKey]
 #[cfg(feature = "derive")]
