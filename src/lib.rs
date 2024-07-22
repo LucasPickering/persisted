@@ -645,6 +645,7 @@ pub trait PersistedContainer {
 #[derive(Copy, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct SingletonKey<V> {
+    #[cfg_attr(feature = "serde", serde(skip))]
     phantom: PhantomData<V>,
 }
 
