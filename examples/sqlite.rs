@@ -53,7 +53,7 @@ impl PersistedStore<SelectedIndexKey> for Store {
         }
     }
 
-    fn store_persisted(key: &SelectedIndexKey, value: usize) {
+    fn store_persisted(key: &SelectedIndexKey, value: &usize) {
         let result = Self::INSTANCE.with(|store| {
             store
                 .0

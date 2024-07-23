@@ -184,7 +184,7 @@ pub trait PersistedStore<K: PersistedKey> {
     fn load_persisted(key: &K) -> Option<K::Value>;
 
     /// Persist a value in the store, under the given key
-    fn store_persisted(key: &K, value: K::Value);
+    fn store_persisted(key: &K, value: &K::Value);
 }
 
 /// A wrapper that will automatically persist its contained value to the
@@ -213,7 +213,7 @@ pub trait PersistedStore<K: PersistedKey> {
 /// provided.
 #[derive(derive_more::Debug, Display)]
 #[display(bound(K::Value: Display))]
-#[display("{}", value.as_ref().unwrap())] // See invariant on field
+#[display("{value}")]
 pub struct Persisted<S, K>
 where
     S: PersistedStore<K>,
@@ -222,10 +222,7 @@ where
     #[debug(skip)] // Omit bound on S
     backend: PhantomData<S>,
     key: K,
-    /// This is an option so we can move the value out and pass it to the store
-    /// during drop
-    /// Invariant: Always `Some` until drop
-    value: Option<K::Value>,
+    value: K::Value,
 }
 
 impl<S, K> Persisted<S, K>
@@ -242,7 +239,7 @@ where
         Self {
             backend: PhantomData,
             key,
-            value: Some(value),
+            value,
         }
     }
 
@@ -277,8 +274,7 @@ where
     type Target = K::Value;
 
     fn deref(&self) -> &Self::Target {
-        // Safe because value is always Some until drop
-        self.value.as_ref().unwrap()
+        &self.value
     }
 }
 
@@ -288,8 +284,7 @@ where
     K: PersistedKey,
 {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        // Safe because value is always Some until drop
-        self.value.as_mut().unwrap()
+        &mut self.value
     }
 }
 
@@ -300,8 +295,7 @@ where
     K: PersistedKey,
 {
     fn drop(&mut self) {
-        let value = self.value.take().unwrap();
-        S::store_persisted(&self.key, value);
+        S::store_persisted(&self.key, &self.value);
     }
 }
 
@@ -527,7 +521,7 @@ where
 {
     fn drop(&mut self) {
         let value = self.container.get_persisted();
-        S::store_persisted(&self.key, value);
+        S::store_persisted(&self.key, &value);
     }
 }
 

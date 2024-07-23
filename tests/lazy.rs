@@ -30,8 +30,8 @@ impl PersistedStore<SelectedIdKey> for Store {
         Self::INSTANCE.with(|store| store.0.get())
     }
 
-    fn store_persisted(_key: &SelectedIdKey, value: PersonId) {
-        Self::INSTANCE.with(|store| store.0.set(Some(value)))
+    fn store_persisted(_key: &SelectedIdKey, value: &PersonId) {
+        Self::INSTANCE.with(|store| store.0.set(Some(*value)))
     }
 }
 

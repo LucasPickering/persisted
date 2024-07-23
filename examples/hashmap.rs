@@ -41,7 +41,7 @@ where
         })
     }
 
-    fn store_persisted(key: &K, value: K::Value) {
+    fn store_persisted(key: &K, value: &K::Value) {
         Self::INSTANCE.with(|store| {
             let mut map = store.0.borrow_mut();
             map.insert((K::type_name(), key.to_string()), value.to_string());
