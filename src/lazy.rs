@@ -2,12 +2,12 @@ use crate::{PersistedContainer, PersistedKey, PersistedStore};
 use core::marker::PhantomData;
 use derive_more::{Deref, DerefMut, Display};
 
-/// Similar to [Persisted], but the value that's sent to the store is not the
-/// same as the value stored in memory. Instead, the value is computed at save
-/// time by [PersistedContainer::get_persisted]. Similarly, the persisted value
-/// that's loaded at initialization isn't stored directly in the container.
-/// Instead, [PersistedContainer::set_persisted] determines how to initialize
-/// state based on it.
+/// Similar to [Persisted](crate::eager::Persisted), but the value that's sent
+/// to the store is not the same as the value stored in memory. Instead, the
+/// value is computed at save time by [PersistedContainer::get_persisted].
+/// Similarly, the persisted value that's loaded at initialization isn't stored
+/// directly in the container. Instead, [PersistedContainer::set_persisted]
+/// determines how to initialize state based on it.
 ///
 /// This is useful if the value you want to store is some derivation of the
 /// value you keep in memory. For example, storing which item in a list is
