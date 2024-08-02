@@ -126,8 +126,8 @@ fn main() {
     };
 
     let mut people = SelectList::new(make_list());
-    *people.selected_index = 1;
-    *people.values[1].enabled = false;
+    *people.selected_index.borrow_mut() = 1;
+    *people.values[1].enabled.borrow_mut() = false;
     println!("Selected: {:?}", people.selected());
     drop(people);
 

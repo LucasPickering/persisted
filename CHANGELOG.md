@@ -6,9 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased] - ReleaseDate
 
-### Fixes
+### Breaking
 
 - Exclude `phantom` field from `SingletonKey` during serialization
+- Persist values on mutation rather than just on drop, for `Persisted` only
 
 ## [0.1.1] - 2024-06-21
 
