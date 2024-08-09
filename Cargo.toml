@@ -6,7 +6,7 @@ license = "MIT"
 name = "persisted"
 repository = "https://github.com/LucasPickering/persisted"
 rust-version = "1.60.0"
-version = "0.2.1"
+version = "0.2.2"
 
 [workspace]
 members = ["persisted_derive"]
