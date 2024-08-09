@@ -1,5 +1,5 @@
 use crate::{PersistedKey, PersistedStore};
-use core::{marker::PhantomData, ops::DerefMut};
+use core::{fmt::Debug, marker::PhantomData, ops::DerefMut};
 use derive_more::{Deref, Display};
 
 /// A wrapper that will automatically persist its contained value to the
@@ -26,6 +26,7 @@ use derive_more::{Deref, Display};
 /// persisted values would overwrite each other. It's unlikely this is the
 /// desired behavior, and therefore is not provided.
 #[derive(derive_more::Debug, Deref, Display)]
+#[debug(bound(K::Value: Debug))]
 #[display(bound(K::Value: Display))]
 #[display("{value}")]
 pub struct Persisted<S, K>
@@ -95,6 +96,7 @@ where
 /// value. The purpose of this is to save the value immediately after it is
 /// mutated.
 #[derive(derive_more::Debug)]
+#[debug(bound(K::Value: Debug))]
 pub struct PersistedRefMut<'a, S, K>
 where
     S: PersistedStore<K>,
