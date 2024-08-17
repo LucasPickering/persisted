@@ -13,25 +13,39 @@
 use persisted::{
     PersistedContainer, PersistedKey, PersistedLazy, PersistedStore,
 };
-use std::cell::Cell;
+use std::{
+    cell::Cell,
+    sync::atomic::{AtomicUsize, Ordering},
+};
 
 /// Persist just the stored ID
 #[derive(Default)]
-struct Store(Cell<Option<PersonId>>);
+struct Store {
+    id: Cell<Option<PersonId>>,
+    save_count: AtomicUsize,
+}
 
 impl Store {
     thread_local! {
         static INSTANCE: Store = Default::default();
     }
+
+    fn save_count() -> usize {
+        Self::INSTANCE
+            .with(|store| store.save_count.load(Ordering::Relaxed).into())
+    }
 }
 
 impl PersistedStore<SelectedIdKey> for Store {
     fn load_persisted(_key: &SelectedIdKey) -> Option<PersonId> {
-        Self::INSTANCE.with(|store| store.0.get())
+        Self::INSTANCE.with(|store| store.id.get())
     }
 
     fn store_persisted(_key: &SelectedIdKey, value: &PersonId) {
-        Self::INSTANCE.with(|store| store.0.set(Some(*value)))
+        Self::INSTANCE.with(|store| {
+            store.id.set(Some(*value));
+            store.save_count.fetch_add(1, Ordering::Relaxed);
+        })
     }
 }
 
@@ -108,9 +122,17 @@ fn lazy() {
             selected_index: 0,
         },
     );
-    people.selected_index = 1;
-    drop(people);
+    assert_eq!(Store::save_count(), 0);
+    people.get_mut().selected_index = 1;
+    assert_eq!(Store::save_count(), 1);
 
+    // Store should only be called if the persisted value actually changed
+    people.get_mut().selected_index = 1;
+    assert_eq!(Store::save_count(), 1);
+    people.get_mut().selected_index = 2;
+    assert_eq!(Store::save_count(), 2);
+
+    // The previous value gets restored
     let people = PersistedLazy::<Store, _, _>::new(
         SelectedIdKey,
         SelectList {
@@ -118,6 +140,6 @@ fn lazy() {
             selected_index: 0,
         },
     );
-    // The previous value was restored
-    assert_eq!(people.selected_index, 1);
+    assert_eq!(people.selected_index, 2);
+    assert_eq!(Store::save_count(), 2);
 }

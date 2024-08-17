@@ -1,5 +1,5 @@
-use crate::{PersistedContainer, PersistedKey, PersistedStore};
-use core::marker::PhantomData;
+use crate::{PersistedKey, PersistedStore};
+use core::{fmt::Debug, marker::PhantomData};
 use derive_more::{Deref, DerefMut, Display};
 
 /// Similar to [Persisted](crate::eager::Persisted), but the value that's sent
@@ -15,15 +15,11 @@ use derive_more::{Deref, DerefMut, Display};
 /// persist the *ID* of the selected item so it's resilient to re-ordering, you
 /// can use this.
 ///
-/// **Note:** Unlike `Persisted`, the value of `PersistedLazy` is only persisted
-/// on **drop**, not whenever it is mutated. This is a technical limitation that
-/// will hopefully be fixed in the future.
-///
 /// ## Generic Params
 ///
 /// - `S`: The backend type used to persist data. While we don't need access to
 ///   an instance of the backend, we do need to know its type so we can access
-///   its static functions on setup/drop.
+///   its static functions on setup/save.
 /// - `K`: The type of the persistence key
 /// - `C`: The type of the wrapping container (see [PersistedContainer]). The
 ///   type of the container's persisted value must match the expected value for
@@ -31,16 +27,20 @@ use derive_more::{Deref, DerefMut, Display};
 ///
 /// ## Accessing
 ///
-/// The inner container is accessed and modified transparently via [Deref] and
-/// [DerefMut] implementations.
+/// The inner value can be accessed immutably via [Deref]. To get mutable
+/// access, use [PersistedLazy::get_mut]. This wrapper method returns a guard
+/// that implements [DerefMut] (similar to [RefMut](std::cell::RefMut) or
+/// [MutexGuard](std::sync::MutexGuard), without the internal mutability). When
+/// your mutable access is complete, this wrapper will be dropped and the value
+/// will be persisted to the store **only if it changed** (according to its
+/// [PartialEq] impl).
 ///
 /// ## Cloning
 ///
 /// This type intentionally does *not* implement [Clone]. Cloning would result
-/// in two containers with the same key. When the containers are eventually
-/// dropped, whichever is dropped first would have its persisted value
-/// overwritten by the other. It's unlikely this is the desired behavior, and
-/// therefore is not provided.
+/// in two containers with the same key. Whenever a modification is made to one
+/// it will overwrite the persistence slot. It's unlikely this is the desired
+/// behavior, and therefore is not provided.
 ///
 /// ## Example
 ///
@@ -141,9 +141,8 @@ use derive_more::{Deref, DerefMut, Display};
 ///         selected_index: 0,
 ///     },
 /// );
-/// people.selected_index = 1;
+/// people.get_mut().selected_index = 1;
 /// assert_eq!(people.selected().id.0, 28833);
-/// drop(people);
 ///
 /// let people = PersistedLazy::<Store, _, _>::new(
 ///     SelectedIdKey,
@@ -156,7 +155,8 @@ use derive_more::{Deref, DerefMut, Display};
 /// assert_eq!(people.selected_index, 1);
 /// assert_eq!(people.selected().id.0, 28833);
 /// ```
-#[derive(derive_more::Debug, Deref, DerefMut, Display)]
+#[derive(derive_more::Debug, Deref, Display)]
+#[debug(bound(K::Value: Debug))]
 #[display("{}", container)]
 pub struct PersistedLazy<S, K, C>
 where
@@ -167,8 +167,10 @@ where
     #[debug(skip)] // Omit bound on S
     backend: PhantomData<S>,
     key: K,
+    /// Cache the most recently persisted value so we can check if it's changed
+    /// after each mutable access. When it does change, we'll persist.
+    last_persisted: Option<K::Value>,
     #[deref]
-    #[deref_mut]
     container: C,
 }
 
@@ -192,6 +194,7 @@ where
             backend: PhantomData,
             key,
             container,
+            last_persisted: None,
         }
     }
 
@@ -204,6 +207,20 @@ where
         C: Default,
     {
         Self::new(key, C::default())
+    }
+
+    /// Get a mutable reference to the value. This is wrapped by a guard, so
+    /// that after mutation when the guard is dropped, the value can be
+    /// persisted. [PersistedStore::store_persisted] will only be called if the
+    /// persisted value actually changed, hence the `K::Value: PartialEq` bound.
+    /// This means [PersistedContainer::get_persisted] will be called after
+    /// event mutable access, but the value will only be written to the store
+    /// when it's been modified.
+    pub fn get_mut(&mut self) -> PersistedLazyRefMut<S, K, C>
+    where
+        K::Value: PartialEq,
+    {
+        PersistedLazyRefMut { lazy: self }
     }
 }
 
@@ -231,4 +248,84 @@ where
         let value = self.container.get_persisted();
         S::store_persisted(&self.key, &value);
     }
+}
+
+/// A guard encompassing the lifespan of a mutable reference to a lazy
+/// container. The purpose of this is to save the value immediately after it is
+/// mutated. **The save will only occur if the value actually changed.** A copy
+/// of the previous value is saved before the mutable access, and compared after
+/// the access.
+#[derive(derive_more::Debug)]
+#[debug(bound(K::Value: Debug))]
+pub struct PersistedLazyRefMut<'a, S, K, C>
+where
+    S: PersistedStore<K>,
+    K: PersistedKey,
+    K::Value: PartialEq,
+    C: PersistedContainer<Value = K::Value>,
+{
+    lazy: &'a mut PersistedLazy<S, K, C>,
+}
+
+impl<'a, S, K, C> Deref for PersistedLazyRefMut<'a, S, K, C>
+where
+    S: PersistedStore<K>,
+    K: PersistedKey,
+    K::Value: PartialEq,
+    C: PersistedContainer<Value = K::Value>,
+{
+    type Target = C;
+
+    fn deref(&self) -> &Self::Target {
+        &self.lazy.container
+    }
+}
+
+impl<'a, S, K, C> DerefMut for PersistedLazyRefMut<'a, S, K, C>
+where
+    S: PersistedStore<K>,
+    K: PersistedKey,
+    K::Value: PartialEq,
+    C: PersistedContainer<Value = K::Value>,
+{
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.lazy.container
+    }
+}
+
+/// Save value after modification **only if it changed**
+impl<'a, S, K, C> Drop for PersistedLazyRefMut<'a, S, K, C>
+where
+    S: PersistedStore<K>,
+    K: PersistedKey,
+    K::Value: PartialEq,
+    C: PersistedContainer<Value = K::Value>,
+{
+    fn drop(&mut self) {
+        let persisted_value = self.lazy.container.get_persisted();
+        if !self
+            .lazy
+            .last_persisted
+            .as_ref()
+            .is_some_and(|last_persisted| last_persisted == &persisted_value)
+        {
+            S::store_persisted(&self.lazy.key, &persisted_value);
+            self.lazy.last_persisted = Some(persisted_value);
+        }
+    }
+}
+
+/// A container that can store and provide a persisted value. This is used in
+/// conjunction with [PersistedLazy] to define how to lazily get the value that
+/// should be persisted, and how to restore state when a persisted value is
+/// loaded during initialization.
+pub trait PersistedContainer {
+    /// The value to be persisted
+    type Value;
+
+    /// Get the current value to persist in the store
+    fn get_persisted(&self) -> Self::Value;
+
+    /// Set the container's value, based on value loaded from the store
+    fn set_persisted(&mut self, value: Self::Value);
 }

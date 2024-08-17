@@ -35,7 +35,8 @@
 //! [PersistedLazy]. The wrapper is created with a key and optionally a default
 //! value. A request is made to the store to load the most recent value for the
 //! key, and if present that value is used. Whenever the value is modified, the
-//! store is notified of the new value so it can be saved.
+//! store is notified of the new value so it can be saved (see either
+//! [Persisted] or [PersistedLazy] for a stricter definition of "is modified").
 //!
 //! Because the store is accessed from constructors and destructors, it cannot
 //! be passed around and must be reachable statically. The easiest way to do
@@ -139,7 +140,10 @@
 mod eager;
 mod lazy;
 
-pub use crate::{eager::Persisted, lazy::PersistedLazy};
+pub use crate::{
+    eager::Persisted,
+    lazy::{PersistedContainer, PersistedLazy, PersistedLazyRefMut},
+};
 /// Derive macro for [PersistedKey]
 #[cfg(feature = "derive")]
 pub use persisted_derive::PersistedKey;
@@ -176,10 +180,10 @@ use core::{
 ///
 /// All three of these requirements derive from how the store is accessed.
 /// Values are loaded during initialization by [Persisted]/[PersistedLazy], and
-/// saved by their respective [Drop] implementations. In both cases, there is no
-/// reference to the store available, and no way of propagating errors or
-/// futures. For this reason, your store access should be _fast_, to prevent
-/// latency in your program.
+/// saved by their respective guard's `Drop` implementations. In both cases,
+/// there is no reference to the store available, and no way of propagating
+/// errors or futures. For this reason, your store access should be _fast_, to
+/// prevent latency in your program.
 pub trait PersistedStore<K: PersistedKey> {
     /// Load a persisted value from the store, identified by the given key.
     /// Return `Ok(None)` if the value isn't present.
@@ -250,21 +254,6 @@ pub trait PersistedKey {
     /// but in most cases it's easier just to use the derive macro anyway, and
     /// just don't call this function.
     fn type_name() -> &'static str;
-}
-
-/// A container that can store and provide a persisted value. This is used in
-/// conjunction with [PersistedLazy] to define how to lazily get the value that
-/// should be persisted, and how to restore state when a persisted value is
-/// loaded during initialization.
-pub trait PersistedContainer {
-    /// The value to be persisted
-    type Value;
-
-    /// Get the current value to persist in the store
-    fn get_persisted(&self) -> Self::Value;
-
-    /// Set the container's value, based on value loaded from the store
-    fn set_persisted(&mut self, value: Self::Value);
 }
 
 /// A persisted key for a value type that appears only once in a program. The

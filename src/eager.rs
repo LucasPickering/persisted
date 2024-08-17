@@ -16,8 +16,12 @@ use derive_more::{Deref, Display};
 ///
 /// ## Accessing
 ///
-/// The inner value is accessed and modified transparently via [Deref] and
-/// [DerefMut] implementations
+/// The inner value can be accessed immutably via [Deref]. To get mutable
+/// access, use [Persisted::get_mut]. This wrapper method returns a guard that
+/// implements [DerefMut] (similar to [RefMut](std::cell::RefMut) or
+/// [MutexGuard](std::sync::MutexGuard), without the internal mutability). When
+/// your mutable access is complete, this wrapper will be dropped and the value,
+/// which presumably was changed, will be persisted to the store.
 ///
 /// ## Cloning
 ///

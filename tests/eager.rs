@@ -16,7 +16,7 @@ use std::{
 /// and parsing with a more robust form of serialization/deserialization, but
 /// this example is simplified to not rely on dependencies.
 ///
-/// We need a `RefCell` to allow mutable access to the store from the drop
+/// We need a `RefCell` to allow mutable access to the store from the save
 /// handler of persisted values.
 #[derive(Default)]
 struct Store(RefCell<HashMap<(&'static str, String), String>>);
@@ -125,7 +125,6 @@ fn hashmap() {
     let mut people = SelectList::new(make_list());
     *people.selected_index.get_mut() = 1;
     *people.values[1].enabled.get_mut() = false;
-    drop(people);
 
     let people = SelectList::new(make_list());
     // The previous values were restored

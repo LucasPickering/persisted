@@ -134,7 +134,6 @@ fn main() {
     let mut people = SelectList::new(person_list.clone());
     *people.selected_index.get_mut() = 1;
     println!("Selected: {:?}", people.selected());
-    drop(people);
 
     let people = SelectList::new(person_list);
     // The previous value was restored

@@ -107,9 +107,8 @@ fn main() {
             selected_index: 0,
         },
     );
-    people.selected_index = 1;
+    people.get_mut().selected_index = 1;
     println!("Selected: {:?}", people.selected());
-    drop(people);
 
     let people = PersistedLazy::<Store, _, _>::new(
         SelectedIdKey,
