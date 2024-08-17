@@ -71,7 +71,7 @@ where
 
     /// Get a mutable reference to the value. This is wrapped by a guard, so
     /// that after mutation when the guard is dropped, the value can be saved.
-    pub fn borrow_mut(&mut self) -> PersistedRefMut<'_, S, K> {
+    pub fn get_mut(&mut self) -> PersistedRefMut<'_, S, K> {
         PersistedRefMut {
             backend: self.backend,
             key: &self.key,

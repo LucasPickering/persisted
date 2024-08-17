@@ -132,7 +132,7 @@ fn main() {
     ];
 
     let mut people = SelectList::new(person_list.clone());
-    *people.selected_index.borrow_mut() = 1;
+    *people.selected_index.get_mut() = 1;
     println!("Selected: {:?}", people.selected());
     drop(people);
 
