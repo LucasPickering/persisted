@@ -81,7 +81,8 @@ impl PersistedContainer for SelectList {
     }
 }
 
-fn main() {
+#[test]
+fn lazy() {
     let person_list = vec![
         Person {
             id: PersonId(23089),

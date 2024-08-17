@@ -112,7 +112,8 @@ impl Display for ToggleKey {
     }
 }
 
-fn main() {
+#[test]
+fn hashmap() {
     let make_list = || {
         vec![
             Person::new(PersonId(23089), "Fred".into(), 17),
