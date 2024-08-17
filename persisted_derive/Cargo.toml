@@ -5,7 +5,7 @@ edition = "2021"
 license = "MIT"
 name = "persisted_derive"
 repository = "https://github.com/LucasPickering/persisted"
-version = "0.1.1"
+version = "0.3.0"
 # Intentionally omit rust-version here, we'll just rely on the root crate
 
 [lib]
