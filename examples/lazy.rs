@@ -65,11 +65,11 @@ impl SelectList {
 impl PersistedContainer for SelectList {
     type Value = PersonId;
 
-    fn get_persisted(&self) -> Self::Value {
+    fn get_to_persist(&self) -> Self::Value {
         self.selected().id
     }
 
-    fn set_persisted(&mut self, value: Self::Value) {
+    fn restore_persisted(&mut self, value: Self::Value) {
         // Find selected person by ID
         self.selected_index = self
             .values

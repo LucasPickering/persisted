@@ -4,9 +4,9 @@ use derive_more::{Deref, DerefMut, Display};
 
 /// Similar to [Persisted](crate::eager::Persisted), but the value that's sent
 /// to the store is not the same as the value stored in memory. Instead, the
-/// value is computed at save time by [PersistedContainer::get_persisted].
+/// value is computed at save time by [PersistedContainer::get_to_persist].
 /// Similarly, the persisted value that's loaded at initialization isn't stored
-/// directly in the container. Instead, [PersistedContainer::set_persisted]
+/// directly in the container. Instead, [PersistedContainer::restore_persisted]
 /// determines how to initialize state based on it.
 ///
 /// This is useful if the value you want to store is some derivation of the
@@ -100,11 +100,11 @@ use derive_more::{Deref, DerefMut, Display};
 /// impl PersistedContainer for SelectList {
 ///     type Value = PersonId;
 ///
-///     fn get_persisted(&self) -> Self::Value {
+///     fn get_to_persist(&self) -> Self::Value {
 ///         self.selected().id
 ///     }
 ///
-///     fn set_persisted(&mut self, value: Self::Value) {
+///     fn restore_persisted(&mut self, value: Self::Value) {
 ///         // Find selected person by ID
 ///         self.selected_index = self
 ///             .values
@@ -183,11 +183,11 @@ where
     /// Initialize a given container whose value will lazily be loaded and
     /// persisted. If a persisted value is available in the store, it will be
     /// loaded and used to initialize the container via
-    /// [PersistedContainer::set_persisted].
+    /// [PersistedContainer::restore_persisted].
     pub fn new(key: K, mut container: C) -> Self {
         // Fetch persisted value from the backend
         if let Some(value) = S::load_persisted(&key) {
-            container.set_persisted(value);
+            container.restore_persisted(value);
         }
 
         Self {
@@ -201,7 +201,7 @@ where
     /// Initialize a new default container whose value will lazily be loaded and
     /// persisted. If a persisted value is available in the store, it will be
     /// loaded and used to initialize the container via
-    /// [PersistedContainer::set_persisted].
+    /// [PersistedContainer::restore_persisted].
     pub fn new_default(key: K) -> Self
     where
         C: Default,
@@ -213,7 +213,7 @@ where
     /// that after mutation when the guard is dropped, the value can be
     /// persisted. [PersistedStore::store_persisted] will only be called if the
     /// persisted value actually changed, hence the `K::Value: PartialEq` bound.
-    /// This means [PersistedContainer::get_persisted] will be called after
+    /// This means [PersistedContainer::get_to_persist] will be called after
     /// event mutable access, but the value will only be written to the store
     /// when it's been modified.
     pub fn get_mut(&mut self) -> PersistedLazyRefMut<S, K, C>
@@ -245,7 +245,7 @@ where
     C: PersistedContainer<Value = K::Value>,
 {
     fn drop(&mut self) {
-        let value = self.container.get_persisted();
+        let value = self.container.get_to_persist();
         S::store_persisted(&self.key, &value);
     }
 }
@@ -302,7 +302,7 @@ where
     C: PersistedContainer<Value = K::Value>,
 {
     fn drop(&mut self) {
-        let persisted_value = self.lazy.container.get_persisted();
+        let persisted_value = self.lazy.container.get_to_persist();
         if !self
             .lazy
             .last_persisted
@@ -324,8 +324,8 @@ pub trait PersistedContainer {
     type Value;
 
     /// Get the current value to persist in the store
-    fn get_persisted(&self) -> Self::Value;
+    fn get_to_persist(&self) -> Self::Value;
 
     /// Set the container's value, based on value loaded from the store
-    fn set_persisted(&mut self, value: Self::Value);
+    fn restore_persisted(&mut self, value: Self::Value);
 }
