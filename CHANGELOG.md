@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased] - ReleaseDate
 
+### Fixed
+
+- Don't save `PersistedLazy` contents on drop
+  - This was a bug, lingering from pre-0.3
+
 ## [0.3.0] - 2024-08-17
 
 ### Breaking

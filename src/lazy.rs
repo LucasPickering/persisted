@@ -236,20 +236,6 @@ where
     }
 }
 
-/// Save value after modification. This assumes the user modified the value
-/// while they had this mutable reference.
-impl<S, K, C> Drop for PersistedLazy<S, K, C>
-where
-    S: PersistedStore<K>,
-    K: PersistedKey,
-    C: PersistedContainer<Value = K::Value>,
-{
-    fn drop(&mut self) {
-        let value = self.container.get_to_persist();
-        S::store_persisted(&self.key, &value);
-    }
-}
-
 /// A guard encompassing the lifespan of a mutable reference to a lazy
 /// container. The purpose of this is to save the value immediately after it is
 /// mutated. **The save will only occur if the value actually changed.** A copy
