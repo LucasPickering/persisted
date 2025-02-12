@@ -29,11 +29,10 @@ use derive_more::{Deref, DerefMut, Display};
 ///
 /// The inner value can be accessed immutably via [Deref]. To get mutable
 /// access, use [PersistedLazy::get_mut]. This wrapper method returns a guard
-/// that implements [DerefMut] (similar to [RefMut](std::cell::RefMut) or
-/// [MutexGuard](std::sync::MutexGuard), without the internal mutability). When
-/// your mutable access is complete, this wrapper will be dropped and the value
-/// will be persisted to the store **only if it changed** (according to its
-/// [PartialEq] impl).
+/// that implements [DerefMut] (similar to `RefMut` or `MutexGuard` from `std`,
+/// without the internal mutability). When your mutable access is complete, this
+/// wrapper will be dropped and the value will be persisted to the store **only
+/// if it changed** (according to its [PartialEq] impl).
 ///
 /// ## Cloning
 ///
@@ -48,7 +47,7 @@ use derive_more::{Deref, DerefMut, Display};
 /// use persisted::{
 ///     PersistedContainer, PersistedKey, PersistedLazy, PersistedStore,
 /// };
-/// use std::cell::Cell;
+/// use core::cell::Cell;
 ///
 /// /// Persist just the stored ID
 /// #[derive(Default)]
