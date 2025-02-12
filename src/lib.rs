@@ -141,7 +141,7 @@ mod eager;
 mod lazy;
 
 pub use crate::{
-    eager::Persisted,
+    eager::{Persisted, PersistedRefMut},
     lazy::{PersistedContainer, PersistedLazy, PersistedLazyRefMut},
 };
 /// Derive macro for [PersistedKey]

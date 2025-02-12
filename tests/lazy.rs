@@ -31,8 +31,7 @@ impl Store {
     }
 
     fn save_count() -> usize {
-        Self::INSTANCE
-            .with(|store| store.save_count.load(Ordering::Relaxed).into())
+        Self::INSTANCE.with(|store| store.save_count.load(Ordering::Relaxed))
     }
 }
 
