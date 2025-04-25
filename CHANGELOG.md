@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased] - ReleaseDate
 
+### Added
+
+- Add `Persisted::key` and `PersistedLazy::key`
+
 ## [0.4.1] - 2025-02-12
 
 ### Fixed

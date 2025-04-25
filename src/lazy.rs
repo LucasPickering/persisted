@@ -208,6 +208,11 @@ where
         Self::new(key, C::default())
     }
 
+    /// Get a reference to this container's key
+    pub fn key(&self) -> &K {
+        &self.key
+    }
+
     /// Get a mutable reference to the value. This is wrapped by a guard, so
     /// that after mutation when the guard is dropped, the value can be
     /// persisted. [PersistedStore::store_persisted] will only be called if the

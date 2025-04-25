@@ -73,6 +73,11 @@ where
         Self::new(key, K::Value::default())
     }
 
+    /// Get a reference to this container's key
+    pub fn key(&self) -> &K {
+        &self.key
+    }
+
     /// Get a mutable reference to the value. This is wrapped by a guard, so
     /// that after mutation when the guard is dropped, the value can be saved.
     pub fn get_mut(&mut self) -> PersistedRefMut<'_, S, K> {
