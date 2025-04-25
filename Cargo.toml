@@ -1,19 +1,30 @@
 [package]
-authors = ["Lucas Pickering <lucas@lucaspickering.me>"]
+authors = {workspace = true}
 description = "Persist arbitrary program state quickly and easily"
-edition = "2021"
-license = "MIT"
+edition = {workspace = true}
+keywords = {workspace = true}
+license = {workspace = true}
 name = "persisted"
-repository = "https://github.com/LucasPickering/persisted"
-rust-version = "1.60.0"
-version = "0.4.1"
+repository = {workspace = true}
+rust-version = {workspace = true}
+version = {workspace = true}
 
 [workspace]
 members = ["persisted_derive"]
 
+[workspace.package]
+authors = ["Lucas Pickering <lucas@lucaspickering.me>"]
+description = "Persist arbitrary program state quickly and easily"
+edition = "2021"
+keywords = ["persistence", "serde"]
+license = "MIT"
+repository = "https://github.com/LucasPickering/persisted"
+rust-version = "1.60.0"
+version = "0.4.1"
+
 [dependencies]
 derive_more = {version = "1.0.0", default-features = false, features = ["debug", "display", "deref", "deref_mut"]}
-persisted_derive = {path = "./persisted_derive", version = "=0.3.1", optional = true}
+persisted_derive = {path = "./persisted_derive", version = "=0.4.1", optional = true}
 serde = {version = "1", default-features = false, features = ["derive"], optional = true}
 
 [dev-dependencies]

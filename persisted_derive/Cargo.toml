@@ -1,19 +1,20 @@
 [package]
-authors = ["Lucas Pickering <lucas@lucaspickering.me>"]
+authors = {workspace = true}
 description = "Derive macros for persisted"
-edition = "2021"
-license = "MIT"
+edition = {workspace = true}
+keywords = {workspace = true}
+license = {workspace = true}
 name = "persisted_derive"
-repository = "https://github.com/LucasPickering/persisted"
-version = "0.3.1"
-# Intentionally omit rust-version here, we'll just rely on the root crate
+repository = {workspace = true}
+rust-version = {workspace = true}
+version = {workspace = true}
 
 [lib]
 proc-macro = true
 
 [dependencies]
 quote = "1"
-syn = { version = "2", features = ["extra-traits"] }
+syn = {version = "2", features = ["extra-traits"]}
 
 [package.metadata.release]
 tag = false
