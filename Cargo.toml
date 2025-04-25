@@ -20,11 +20,11 @@ keywords = ["persistence", "serde"]
 license = "MIT"
 repository = "https://github.com/LucasPickering/persisted"
 rust-version = "1.60.0"
-version = "0.4.1"
+version = "0.4.2"
 
 [dependencies]
 derive_more = {version = "1.0.0", default-features = false, features = ["debug", "display", "deref", "deref_mut"]}
-persisted_derive = {path = "./persisted_derive", version = "=0.4.1", optional = true}
+persisted_derive = {path = "./persisted_derive", version = "=0.4.2", optional = true}
 serde = {version = "1", default-features = false, features = ["derive"], optional = true}
 
 [dev-dependencies]
