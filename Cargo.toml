@@ -19,7 +19,7 @@ edition = "2021"
 keywords = ["persistence", "serde"]
 license = "MIT"
 repository = "https://github.com/LucasPickering/persisted"
-rust-version = "1.60.0"
+rust-version = "1.76.0"
 version = "0.4.2"
 
 [dependencies]
