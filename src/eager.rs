@@ -1,6 +1,9 @@
 use crate::{PersistedKey, PersistedStore};
-use core::{fmt::Debug, marker::PhantomData, ops::DerefMut};
-use derive_more::{Deref, Display};
+use core::{
+    fmt::{self, Debug, Display},
+    marker::PhantomData,
+    ops::{Deref, DerefMut},
+};
 
 /// A wrapper that will automatically persist its contained value to the
 /// store. The value will be loaded from the store on creation, and saved on
@@ -29,19 +32,13 @@ use derive_more::{Deref, Display};
 /// in two values with the same key. When the values are mutated, their
 /// persisted values would overwrite each other. It's unlikely this is the
 /// desired behavior, and therefore is not provided.
-#[derive(derive_more::Debug, Deref, Display)]
-#[debug(bound(K::Value: Debug))]
-#[display(bound(K::Value: Display))]
-#[display("{value}")]
 pub struct Persisted<S, K>
 where
     S: PersistedStore<K>,
     K: PersistedKey,
 {
-    #[debug(skip)] // Omit bound on S
     backend: PhantomData<S>,
     key: K,
-    #[deref]
     value: K::Value,
 }
 
@@ -101,11 +98,48 @@ where
     }
 }
 
+// Needed to omit Debug bound on S
+impl<S, K> Debug for Persisted<S, K>
+where
+    S: PersistedStore<K>,
+    K: PersistedKey + Debug,
+    K::Value: Debug,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Persisted")
+            .field("backend", &self.backend)
+            .field("key", &self.key)
+            .field("value", &self.value)
+            .finish()
+    }
+}
+
+impl<S, K> Display for Persisted<S, K>
+where
+    S: PersistedStore<K>,
+    K: PersistedKey,
+    K::Value: Display,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.value.fmt(f)
+    }
+}
+
+impl<S, K> Deref for Persisted<S, K>
+where
+    S: PersistedStore<K>,
+    K: PersistedKey,
+{
+    type Target = K::Value;
+
+    fn deref(&self) -> &Self::Target {
+        &self.value
+    }
+}
+
 /// A guard encompassing the lifespan of a mutable reference to a persisted
 /// value. The purpose of this is to save the value immediately after it is
 /// mutated.
-#[derive(derive_more::Debug)]
-#[debug(bound(K::Value: Debug))]
 pub struct PersistedRefMut<'a, S, K>
 where
     S: PersistedStore<K>,
@@ -114,6 +148,22 @@ where
     backend: PhantomData<S>,
     key: &'a K,
     value: &'a mut K::Value,
+}
+
+// Needed to omit Debug bound on S
+impl<'a, S, K> Debug for PersistedRefMut<'a, S, K>
+where
+    S: PersistedStore<K>,
+    K: PersistedKey + Debug,
+    K::Value: Debug,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("PersistedRefMut")
+            .field("backend", &self.backend)
+            .field("key", &self.key)
+            .field("value", &self.value)
+            .finish()
+    }
 }
 
 impl<'a, S, K> Deref for PersistedRefMut<'a, S, K>

@@ -1,6 +1,9 @@
 use crate::{PersistedKey, PersistedStore};
-use core::{fmt::Debug, marker::PhantomData};
-use derive_more::{Deref, DerefMut, Display};
+use core::{
+    fmt::{self, Debug, Display},
+    marker::PhantomData,
+    ops::{Deref, DerefMut},
+};
 
 /// Similar to [Persisted](crate::eager::Persisted), but the value that's sent
 /// to the store is not the same as the value stored in memory. Instead, the
@@ -154,22 +157,17 @@ use derive_more::{Deref, DerefMut, Display};
 /// assert_eq!(people.selected_index, 1);
 /// assert_eq!(people.selected().id.0, 28833);
 /// ```
-#[derive(derive_more::Debug, Deref, Display)]
-#[debug(bound(K::Value: Debug))]
-#[display("{}", container)]
 pub struct PersistedLazy<S, K, C>
 where
     S: PersistedStore<K>,
     K: PersistedKey,
     C: PersistedContainer<Value = K::Value>,
 {
-    #[debug(skip)] // Omit bound on S
     backend: PhantomData<S>,
     key: K,
     /// Cache the most recently persisted value so we can check if it's changed
     /// after each mutable access. When it does change, we'll persist.
     last_persisted: Option<K::Value>,
-    #[deref]
     container: C,
 }
 
@@ -240,13 +238,53 @@ where
     }
 }
 
+// Needed to omit Debug bound on S
+impl<S, K, C> Debug for PersistedLazy<S, K, C>
+where
+    S: PersistedStore<K>,
+    K: PersistedKey + Debug,
+    K::Value: Debug,
+    C: PersistedContainer<Value = K::Value> + Debug,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("PersistedLazy")
+            .field("backend", &self.backend)
+            .field("key", &self.key)
+            .field("last_persisted", &self.last_persisted)
+            .field("container", &self.container)
+            .finish()
+    }
+}
+
+impl<S, K, C> Display for PersistedLazy<S, K, C>
+where
+    S: PersistedStore<K>,
+    K: PersistedKey,
+    C: PersistedContainer<Value = K::Value> + Display,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.container.fmt(f)
+    }
+}
+
+impl<S, K, C> Deref for PersistedLazy<S, K, C>
+where
+    S: PersistedStore<K>,
+    K: PersistedKey,
+    C: PersistedContainer<Value = K::Value>,
+{
+    type Target = C;
+
+    fn deref(&self) -> &Self::Target {
+        &self.container
+    }
+}
+
 /// A guard encompassing the lifespan of a mutable reference to a lazy
 /// container. The purpose of this is to save the value immediately after it is
 /// mutated. **The save will only occur if the value actually changed.** A copy
 /// of the previous value is saved before the mutable access, and compared after
 /// the access.
-#[derive(derive_more::Debug)]
-#[debug(bound(K::Value: Debug))]
 pub struct PersistedLazyRefMut<'a, S, K, C>
 where
     S: PersistedStore<K>,
@@ -255,6 +293,21 @@ where
     C: PersistedContainer<Value = K::Value>,
 {
     lazy: &'a mut PersistedLazy<S, K, C>,
+}
+
+// Needed to omit Debug bound on S
+impl<'a, S, K, C> Debug for PersistedLazyRefMut<'a, S, K, C>
+where
+    S: PersistedStore<K>,
+    K: PersistedKey + Debug,
+    K::Value: PartialEq + Debug,
+    C: PersistedContainer<Value = K::Value> + Debug,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("PersistedLazyRefMut")
+            .field("lazy", &self.lazy)
+            .finish()
+    }
 }
 
 impl<'a, S, K, C> Deref for PersistedLazyRefMut<'a, S, K, C>
