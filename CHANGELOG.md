@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased] - ReleaseDate
 
+### Breaking
+
+- Remove `SingletonKey`
+  - It was unintuitive and not actually that helpful
+- Remove `serde` feature
+  - No longer needed without `SingletonKey`
+
 ### Changed
 
 - Remove `derive_more` dependencies

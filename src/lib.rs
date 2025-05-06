@@ -135,7 +135,6 @@
 //!
 //! `persisted` supports the following Cargo features:
 //! - `derive` (default): Enable derive macros
-//! - `serde`: Enable `Serialize/Deserialize` implementations
 
 mod eager;
 mod lazy;
@@ -147,12 +146,6 @@ pub use crate::{
 /// Derive macro for [PersistedKey]
 #[cfg(feature = "derive")]
 pub use persisted_derive::PersistedKey;
-
-use core::{
-    any,
-    fmt::{self, Debug},
-    marker::PhantomData,
-};
 
 /// A trait for any data store capable of persisting data. A store is the layer
 /// that saves data. It could save it in memory, on disk, over the network, etc.
@@ -245,8 +238,8 @@ pub trait PersistedKey {
     /// actually employ this function, it's provided merely as a utility.
     ///
     /// In most cases this you can rely on the derive implementation, which uses
-    /// [core::any::type_name]. However, for wrapper key types (e.g.
-    /// [SingletonKey]), this should return the name of the wrapped type.
+    /// [core::any::type_name]. However, for wrapper key types, this should
+    /// return the name of the wrapped type.
     ///
     /// Using this is *not* necessary if you use a persistence format that
     /// includes the type name, e.g. [RON](https://github.com/ron-rs/ron). If
@@ -254,92 +247,4 @@ pub trait PersistedKey {
     /// but in most cases it's easier just to use the derive macro anyway, and
     /// just don't call this function.
     fn type_name() -> &'static str;
-}
-
-/// A persisted key for a value type that appears only once in a program. The
-/// **name of the value type** is the only information available as the key,
-/// hence why the value type must only be used once.
-///
-/// ## Example
-///
-/// ```
-/// use persisted::{Persisted, PersistedKey, PersistedStore, SingletonKey};
-///
-/// enum Foo {
-///     Bar,
-///     Baz,
-/// }
-///
-/// #[derive(PersistedKey)]
-/// #[persisted(Foo)]
-/// struct FooKey;
-///
-/// // These two values are equivalent
-/// let value1: Persisted<Store, _> =
-///     Persisted::new(SingletonKey::default(), Foo::Bar);
-/// let value2: Persisted<Store, _> = Persisted::new(FooKey, Foo::Bar);
-///
-///
-/// struct Store;
-///
-/// impl<K: PersistedKey> PersistedStore<K> for Store {
-///     fn load_persisted(key: &K) -> Option<K::Value> {
-///         None
-///     }
-///     fn store_persisted(key: &K, value: &K::Value) {}
-/// }
-/// ```
-#[derive(Copy, Clone)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct SingletonKey<V> {
-    #[cfg_attr(feature = "serde", serde(skip))]
-    phantom: PhantomData<V>,
-}
-
-impl<V> PersistedKey for SingletonKey<V> {
-    type Value = V;
-
-    fn type_name() -> &'static str {
-        // If the key is wrapped in a container type like Option, this *will*
-        // include all the generic params, so it remains unique
-        any::type_name::<V>()
-    }
-}
-
-// Needed to omit Debug bound on V
-impl<V> Debug for SingletonKey<V> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("SingletonKey")
-            .field("phantom", &self.phantom)
-            .finish()
-    }
-}
-
-// Needed to omit Default bound on V
-impl<V> Default for SingletonKey<V> {
-    fn default() -> Self {
-        Self {
-            phantom: PhantomData,
-        }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_singleton_key() {
-        struct Foo;
-
-        assert_eq!(
-            SingletonKey::<Foo>::type_name(),
-            "persisted::tests::test_singleton_key::Foo"
-        );
-        // Wrapped types also work
-        assert_eq!(
-            SingletonKey::<Option<Foo>>::type_name(),
-            "core::option::Option<persisted::tests::test_singleton_key::Foo>"
-        )
-    }
 }

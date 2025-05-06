@@ -91,7 +91,6 @@ version = "0.4.2"
 dependencies = [
  "persisted_derive",
  "rusqlite",
- "serde",
  "serde_json",
 ]
 

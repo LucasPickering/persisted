@@ -24,7 +24,6 @@ version = "0.4.2"
 
 [dependencies]
 persisted_derive = {path = "./persisted_derive", version = "=0.4.2", optional = true}
-serde = {version = "1", default-features = false, features = ["derive"], optional = true}
 
 [dev-dependencies]
 rusqlite = {version = "0.31.0", default-features = false, features = ["bundled"]}
@@ -33,7 +32,6 @@ serde_json = "1.0.117"
 [features]
 default = ["derive"]
 derive = ["dep:persisted_derive"]
-serde = ["dep:serde"]
 
 [package.metadata.release]
 pre-release-replacements = [
